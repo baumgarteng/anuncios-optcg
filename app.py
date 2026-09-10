@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify, render_template
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+OPTCG_LIVE_URL = os.environ.get("OPTCG_LIVE_URL", "https://optcg-cloud-v2.onrender.com")
 
 app = Flask(__name__)
 
@@ -201,6 +202,31 @@ def api_carta():
     if not c:
         return jsonify(erro="carta não encontrada no catálogo"), 404
     return jsonify(c)
+
+
+@app.post("/api/atualizar-preco")
+def api_atualizar_preco():
+    body = request.json or {}
+    liga_url = body.get("liga_url")
+    if not liga_url:
+        return jsonify(erro="liga_url obrigatório"), 400
+    try:
+        req = urllib.request.Request(
+            OPTCG_LIVE_URL.rstrip("/") + "/liga/refresh",
+            data=json.dumps({"liga_url": liga_url}).encode(),
+            headers={"content-type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=45) as r:
+            resultado = json.loads(r.read())
+    except Exception as e:
+        return jsonify(erro=f"scraper ao vivo indisponível: {e}"), 502
+    if resultado.get("error"):
+        return jsonify(erro=resultado["error"]), 502
+    carta = buscar_carta(body.get("code", ""), body.get("variant", ""))
+    if not carta:
+        return jsonify(erro="carta não encontrada após atualizar"), 404
+    return jsonify(carta)
 
 
 @app.post("/api/identificar")

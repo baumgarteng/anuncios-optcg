@@ -3,43 +3,48 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Anúncios — One Piece TCG</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
 
 :root{
-  --background:#0a0e17;
-  --foreground:#eef1f6;
-  --card:#10151f;
-  --card-2:#141b28;
-  --secondary:#161c28;
-  --secondary-foreground:#c7cedb;
-  --muted:#1a2130;
-  --muted-foreground:#8993a6;
-  --border:#232b3a;
-  --border-strong:#303a4e;
-  --input:#171e2b;
-  --primary:#e3a73d;
-  --primary-lit:#f2c569;
-  --primary-foreground:#1b1206;
-  --destructive:#dc4c3f;
-  --destructive-border:#6e2a22;
-  --success:#34c77b;
-  --success-bg:#12291f;
-  --ring:#e3a73d;
-  --paper:#efe7d6;
-  --ink:#1b1206;
-  --wa-bg:#0b141a;
-  --wa-bubble:#005c4b;
-  --wa-text:#e9edef;
-  --wa-time:#8696a0;
+  --background:#fff6e3;
+  --foreground:#2b1b0e;
+  --card:#ffffff;
+  --card-2:#fffaf0;
+  --secondary:#fff1d6;
+  --secondary-foreground:#5b4630;
+  --muted:#fbebc9;
+  --muted-foreground:#8a7150;
+  --border:#eed9ae;
+  --border-strong:#dec17e;
+  --input:#fffdf8;
+  --primary:#e3402d;
+  --primary-lit:#f0604c;
+  --primary-foreground:#ffffff;
+  --straw:#f0b429;
+  --straw-lit:#f7cd5e;
+  --destructive:#c23616;
+  --destructive-bg:#fdecea;
+  --destructive-border:#f1b0a6;
+  --success:#2f9e52;
+  --success-bg:#e4f6e9;
+  --ring:#e3402d;
+  --paper:#fff1d6;
+  --ink:#2b1b0e;
+  --sea:#1e8fa8;
+  --wa-bg:#eee3c8;
+  --wa-bubble:#dcf8c6;
+  --wa-text:#1f2a1a;
+  --wa-time:#6b7d6f;
   --radius:12px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
   background:
-    radial-gradient(1100px 480px at 15% -10%, rgba(227,167,61,.10), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(13,59,74,.35), transparent 55%),
+    radial-gradient(1200px 480px at 12% -12%, rgba(255,255,255,.85), transparent 60%),
+    radial-gradient(1000px 560px at 105% -8%, rgba(126,200,224,.30), transparent 55%),
     var(--background);
   color:var(--foreground);
   font-family:'Archivo',system-ui,sans-serif;
@@ -48,7 +53,7 @@ body{
   -webkit-font-smoothing:antialiased;
 }
 .mono{font-family:'JetBrains Mono',ui-monospace,monospace}
-::selection{background:rgba(227,167,61,.35)}
+::selection{background:rgba(227,64,45,.22)}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:20px}
@@ -58,8 +63,7 @@ body{
 .ribbon{
   height:4px;
   background:repeating-linear-gradient(115deg,
-    var(--destructive) 0 26px, var(--primary) 26px 52px, #16233a 52px 78px);
-  opacity:.85;
+    var(--primary) 0 26px, var(--straw) 26px 52px, var(--sea) 52px 78px);
 }
 
 /* ---------- chrome ---------- */
@@ -69,11 +73,11 @@ body{
 }
 .mark{
   width:42px;height:42px;border-radius:50%;flex-shrink:0;
-  background:radial-gradient(circle at 32% 28%, var(--primary-lit), var(--primary) 55%, #a97a24 100%);
+  background:radial-gradient(circle at 32% 28%, var(--straw-lit), var(--straw) 60%, #c98a12 100%);
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 0 0 1px rgba(0,0,0,.25), 0 4px 14px rgba(227,167,61,.28);
+  box-shadow:0 0 0 1px rgba(0,0,0,.08), 0 4px 14px rgba(240,180,41,.35);
 }
-.mark svg{width:24px;height:24px;color:var(--ink)}
+.mark svg{width:25px;height:25px}
 .title-stack{display:flex;flex-direction:column;gap:2px;min-width:0}
 .top h1{
   font-family:'Cinzel',serif;font-size:22px;font-weight:900;letter-spacing:.02em;margin:0;
@@ -87,7 +91,7 @@ body{
   border:1px solid var(--border);padding:6px 12px;border-radius:999px;
 }
 .health .dot{width:7px;height:7px;border-radius:50%;background:var(--muted-foreground);flex-shrink:0}
-.health.ok .dot{background:var(--success);box-shadow:0 0 0 3px rgba(52,199,123,.18)}
+.health.ok .dot{background:var(--success);box-shadow:0 0 0 3px rgba(47,158,82,.18)}
 
 .tabs{display:flex;gap:4px;padding:18px 22px 0;border-bottom:1px solid var(--border)}
 .tab{
@@ -96,8 +100,8 @@ body{
   font-weight:600;padding:10px 15px;cursor:pointer;border-radius:8px 8px 0 0;
   border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,background .15s;
 }
-.tab:hover{color:var(--foreground);background:rgba(255,255,255,.03)}
-.tab[aria-selected="true"]{color:var(--primary-lit);border-bottom-color:var(--primary)}
+.tab:hover{color:var(--foreground);background:rgba(43,27,14,.04)}
+.tab[aria-selected="true"]{color:var(--primary);border-bottom-color:var(--primary)}
 .tab .cnt{
   font-size:11.5px;background:var(--muted);color:var(--foreground);border-radius:20px;
   padding:1px 7px;margin-left:7px;font-weight:700
@@ -108,7 +112,7 @@ body{
 
 .panel{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;
-  box-shadow:0 1px 0 rgba(255,255,255,.02) inset, 0 12px 30px -18px rgba(0,0,0,.6);
+  box-shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 14px 30px -20px rgba(120,80,20,.28);
 }
 .panel h2{
   display:flex;align-items:center;gap:8px;
@@ -120,9 +124,9 @@ body{
 /* ---------- dropzone ---------- */
 .drop{
   border:2px dashed var(--border-strong);border-radius:var(--radius);padding:32px 20px;text-align:center;
-  cursor:pointer;transition:border-color .15s,background .15s;background:rgba(255,255,255,.015)
+  cursor:pointer;transition:border-color .15s,background .15s;background:var(--card-2)
 }
-.drop:hover,.drop.over{border-color:var(--primary);background:rgba(227,167,61,.06)}
+.drop:hover,.drop.over{border-color:var(--primary);background:#fdf0ea}
 .drop svg{width:26px;height:26px;color:var(--muted-foreground);margin-bottom:8px}
 .drop:hover svg,.drop.over svg{color:var(--primary)}
 .drop p{margin:0;font-weight:600}
@@ -130,15 +134,18 @@ body{
 .shots{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}
 .shot{
   position:relative;width:76px;height:106px;border-radius:8px;overflow:hidden;border:1px solid var(--border);
-  box-shadow:0 6px 14px -8px rgba(0,0,0,.6);transition:transform .15s;
+  box-shadow:0 6px 14px -10px rgba(120,80,20,.5);transition:transform .15s;
 }
 .shot:hover{transform:translateY(-2px)}
 .shot img{width:100%;height:100%;object-fit:cover;display:block}
-.shot button{
-  position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;border:0;
-  background:rgba(10,14,23,.85);color:#fff;cursor:pointer;font-size:13px;line-height:1;padding:0
+.shot .btns{position:absolute;top:3px;right:3px;display:flex;gap:3px}
+.shot .btns button{
+  width:20px;height:20px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(43,27,14,.72);color:#fff;cursor:pointer;font-size:13px;line-height:1;padding:0
 }
-.shot button:hover{background:var(--destructive)}
+.shot .btns button svg{width:11px;height:11px}
+.shot .btns button.edit:hover{background:var(--sea)}
+.shot .btns button.rm:hover{background:var(--destructive)}
 
 /* ---------- buttons ---------- */
 button{font-family:inherit}
@@ -155,8 +162,8 @@ button{font-family:inherit}
 .btn.ghost{background:transparent;color:var(--foreground);border:1px solid var(--border-strong)}
 .btn.ghost:hover:not(:disabled){background:var(--secondary);filter:none}
 .btn.sm{padding:7px 12px;font-size:13.5px}
-.btn.danger{background:transparent;color:#f0a99a;border:1px solid var(--destructive-border)}
-.btn.danger:hover{background:rgba(220,76,63,.12);filter:none}
+.btn.danger{background:transparent;color:var(--destructive);border:1px solid var(--destructive-border)}
+.btn.danger:hover{background:var(--destructive-bg);filter:none}
 .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
 
 /* ---------- card blocks ---------- */
@@ -166,18 +173,18 @@ button{font-family:inherit}
   border-radius:var(--radius);padding:14px;margin-bottom:12px;background:var(--card-2);
   transition:border-color .15s,box-shadow .15s;
 }
-.cardblk:hover{box-shadow:0 10px 26px -18px rgba(0,0,0,.7)}
+.cardblk:hover{box-shadow:0 10px 26px -18px rgba(120,80,20,.35)}
 .cardhead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:11px}
 .cardname{font-weight:700;font-size:17px;line-height:1.25;margin:0}
-.code{font-size:13px;color:var(--primary-lit);margin-top:2px}
+.code{font-size:13px;color:var(--primary);margin-top:2px}
 .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
 .chip{
   font-size:11px;padding:3px 9px;border-radius:999px;background:var(--muted);color:var(--foreground);
   font-weight:700;letter-spacing:.02em;text-transform:uppercase;
 }
 .chip.col{color:#fff}
-.chip.warn{background:#3f2a0a;color:#fbbf24}
-.chip.ok{background:var(--success-bg);color:#6ee7b7}
+.chip.warn{background:#fdecc7;color:#8a5a06}
+.chip.ok{background:var(--success-bg);color:#1f7a3d}
 .fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:520px){.fields{grid-template-columns:1fr}}
 label{display:block;font-size:12.5px;color:var(--muted-foreground);font-weight:600;margin-bottom:4px}
@@ -185,7 +192,7 @@ input,select,textarea{
   width:100%;background:var(--input);border:1px solid var(--border);border-radius:8px;
   color:var(--foreground);padding:9px 11px;font-family:inherit;font-size:15px;transition:border-color .15s,box-shadow .15s;
 }
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ring);box-shadow:0 0 0 3px rgba(227,167,61,.18)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ring);box-shadow:0 0 0 3px rgba(227,64,45,.14)}
 textarea{resize:vertical;min-height:62px}
 .hint{font-size:12px;color:var(--muted-foreground);margin-top:5px}
 
@@ -197,23 +204,23 @@ textarea{resize:vertical;min-height:62px}
 }
 .phone-head .av{
   width:30px;height:30px;border-radius:50%;flex-shrink:0;
-  background:radial-gradient(circle at 32% 28%,var(--primary-lit),var(--primary) 70%);
+  background:radial-gradient(circle at 32% 28%,var(--straw-lit),var(--straw) 70%);
   display:flex;align-items:center;justify-content:center;
 }
-.phone-head .av svg{width:16px;height:16px;color:var(--ink)}
+.phone-head .av svg{width:18px;height:18px}
 .phone-head .who{min-width:0}
 .phone-head .who b{display:block;font-size:13.5px;font-weight:700}
 .phone-head .who span{display:block;font-size:11.5px;color:var(--muted-foreground)}
 .wa{
   background:var(--wa-bg);
-  background-image:radial-gradient(rgba(255,255,255,.025) 1px, transparent 1px);
+  background-image:radial-gradient(rgba(43,27,14,.035) 1px, transparent 1px);
   background-size:14px 14px;
   padding:18px 14px;min-height:220px;
   display:flex;flex-direction:column;gap:9px
 }
 .bubble{
   background:var(--wa-bubble);color:var(--wa-text);border-radius:9px 9px 2px 9px;padding:8px 9px 6px;
-  max-width:88%;align-self:flex-end;box-shadow:0 1px 1px rgba(0,0,0,.25);
+  max-width:88%;align-self:flex-end;box-shadow:0 1px 1px rgba(0,0,0,.1);
   font-size:14.5px;line-height:1.42
 }
 .bubble .imgs{display:grid;gap:3px;margin-bottom:7px;border-radius:6px;overflow:hidden}
@@ -240,11 +247,11 @@ textarea{resize:vertical;min-height:62px}
   background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);
   border-radius:var(--radius);padding:13px;display:flex;gap:12px;transition:box-shadow .15s;
 }
-.sv:hover{box-shadow:0 10px 26px -18px rgba(0,0,0,.7)}
+.sv:hover{box-shadow:0 10px 26px -18px rgba(120,80,20,.35)}
 .sv img{width:60px;height:84px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border)}
 .sv .meta{min-width:0;flex:1}
 .sv .meta h3{margin:0;font-size:15px;font-weight:700;line-height:1.25}
-.sv .price{color:var(--primary-lit);font-weight:700;font-size:14px;margin-top:3px}
+.sv .price{color:var(--primary);font-weight:700;font-size:14px;margin-top:3px}
 .sv .date{color:var(--muted-foreground);font-size:12px;margin-top:2px}
 .sv .acts{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
 
@@ -258,10 +265,10 @@ textarea{resize:vertical;min-height:62px}
 @media(prefers-reduced-motion:reduce){.spin{animation-duration:2.5s}}
 .err{
   display:flex;gap:9px;align-items:flex-start;
-  background:#25120f;border:1px solid var(--destructive-border);color:#f0a99a;padding:11px 13px;
+  background:var(--destructive-bg);border:1px solid var(--destructive-border);color:var(--destructive);padding:11px 13px;
   border-radius:9px;font-size:14px;margin-bottom:13px
 }
-.err svg{width:16px;height:16px;flex-shrink:0;margin-top:1px;color:#f0a99a}
+.err svg{width:16px;height:16px;flex-shrink:0;margin-top:1px;color:var(--destructive)}
 .empty{color:var(--muted-foreground);text-align:center;padding:52px 20px}
 .empty svg{width:34px;height:34px;color:var(--border-strong);margin-bottom:10px}
 .empty p{margin:0 0 6px;font-weight:600;color:var(--foreground)}
@@ -273,16 +280,39 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
   display:inline-flex;align-items:center;gap:8px;
   background:var(--card);border:1px solid var(--border-strong);color:var(--foreground);
   padding:10px 18px;border-radius:999px;font-weight:600;font-size:14px;z-index:99;
-  box-shadow:0 10px 30px -8px rgba(0,0,0,.55);animation:up .18s ease-out;
+  box-shadow:0 10px 30px -8px rgba(120,80,20,.35);animation:up .18s ease-out;
 }
 .toast svg{width:16px;height:16px;color:var(--success)}
 @keyframes up{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
 .hide{display:none !important}
+
+/* ---------- image editor ---------- */
+.editor-overlay{
+  position:fixed;inset:0;background:rgba(43,27,14,.55);display:flex;align-items:center;
+  justify-content:center;z-index:200;padding:20px;
+}
+.editor-panel{
+  background:var(--card);border-radius:16px;max-width:560px;width:100%;max-height:92vh;overflow:auto;
+  padding:18px;box-shadow:0 30px 60px -20px rgba(43,27,14,.5);
+}
+.editor-panel h3{margin:0 0 12px;font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px}
+.editor-panel h3 svg{width:17px;height:17px;color:var(--primary)}
+.editor-stage{background:#1b1b1b;border-radius:10px;overflow:hidden;max-height:360px;display:flex;align-items:center;justify-content:center}
+.editor-stage img{max-width:100%;display:block}
+.editor-controls{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+.editor-slider{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted-foreground);font-weight:600}
+.editor-slider input[type=range]{flex:1;accent-color:var(--primary)}
+.editor-slider span{width:42px;text-align:right;font-variant-numeric:tabular-nums;color:var(--foreground)}
+.editor-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;justify-content:flex-end}
 </style>
 <div class="ribbon"></div>
 <div class="top">
   <div class="mark" aria-hidden="true">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+    <svg viewBox="0 0 24 24">
+      <ellipse cx="12" cy="17.3" rx="10.2" ry="2.6" fill="var(--ink)"/>
+      <path d="M6.4 17 C6.4 9.6 8.8 4 12 4 C15.2 4 17.6 9.6 17.6 17 Z" fill="var(--ink)"/>
+      <rect x="6.8" y="13" width="10.4" height="2.3" rx="1.1" fill="var(--primary)"/>
+    </svg>
   </div>
   <div class="title-stack">
     <h1>Anúncios</h1>
@@ -341,10 +371,11 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
         <details class="rules">
           <summary>Regras fixas aplicadas em todo anúncio</summary>
           <ul>
-            <li>Embalagem descrita só como "em sleeve e bem protegida" — nunca toploader nem outro detalhe</li>
-            <li>Envio pelos Correios (SEDEX) saindo de Joinville/SC, com rastreio</li>
-            <li>Preço sempre no formato R$ 0,00 + frete</li>
-            <li>Desconto só aparece quando há preço de referência da Liga</li>
+            <li>Título sempre em negrito: nome da carta + código</li>
+            <li>Envio por conta do comprador, saindo de Joinville/SC</li>
+            <li>Preço sempre no formato R$ 0,00 + frete, com "(-X% MDL)" quando houver referência</li>
+            <li>Nunca cita efeito, cor, custo, poder ou arquétipo da carta</li>
+            <li>Se falar de embalagem, só "em sleeve e bem protegida"</li>
           </ul>
         </details>
       </div>
@@ -361,7 +392,13 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
         </div>
         <div class="phone">
           <div class="phone-head">
-            <span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg></span>
+            <span class="av">
+              <svg viewBox="0 0 24 24">
+                <ellipse cx="12" cy="17.3" rx="10.2" ry="2.6" fill="var(--ink)"/>
+                <path d="M6.4 17 C6.4 9.6 8.8 4 12 4 C15.2 4 17.6 9.6 17.6 17 Z" fill="var(--ink)"/>
+                <rect x="6.8" y="13" width="10.4" height="2.3" rx="1.1" fill="var(--primary)"/>
+              </svg>
+            </span>
             <span class="who"><b>Grupo · One Piece TCG</b><span>anúncio em rascunho</span></span>
           </div>
           <div class="wa" id="wa">
@@ -373,6 +410,7 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
         </div>
         <div class="row" style="margin-top:14px">
           <button class="btn" id="btn-copy" disabled>Copiar texto</button>
+          <button class="btn ghost" id="btn-copy-img" disabled>Copiar imagens</button>
           <button class="btn ghost" id="btn-save" disabled>Salvar no banco</button>
           <button class="btn ghost sm" id="btn-clear">Limpar</button>
         </div>
@@ -394,6 +432,29 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
   </div>
 </div>
 
+<div class="editor-overlay hide" id="editor-overlay">
+  <div class="editor-panel">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Editar foto</h3>
+    <div class="editor-stage"><img id="editor-img" alt=""></div>
+    <div class="editor-controls">
+      <div class="row">
+        <button class="btn ghost sm" id="ed-rotate-l">Girar ↺</button>
+        <button class="btn ghost sm" id="ed-rotate-r">Girar ↻</button>
+        <button class="btn ghost sm" id="ed-flip">Espelhar</button>
+        <button class="btn ghost sm" id="ed-reset">Resetar</button>
+      </div>
+      <label class="editor-slider">Brilho <input type="range" id="ed-bright" min="50" max="150" value="100"><span id="ed-bright-v">100%</span></label>
+      <label class="editor-slider">Contraste <input type="range" id="ed-contrast" min="50" max="150" value="100"><span id="ed-contrast-v">100%</span></label>
+      <label class="editor-slider">Saturação <input type="range" id="ed-sat" min="0" max="200" value="100"><span id="ed-sat-v">100%</span></label>
+    </div>
+    <div class="editor-actions">
+      <button class="btn ghost sm" id="ed-cancel">Cancelar</button>
+      <button class="btn" id="ed-apply">Aplicar recorte</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <script>
 const COLORS={Red:'#C0392B',Green:'#2E7D5B',Blue:'#2C6FA8',Purple:'#7A4E9E',Yellow:'#C79A1E',Black:'#33383D'};
 const RAR={Leader:'Leader',Common:'C',Uncommon:'UC',Rare:'R',SuperRare:'SR',SecretRare:'SEC',TreasureRare:'TR',Promo:'P'};
@@ -402,8 +463,8 @@ let photos=[], cards=[], gen=null, mode='curto', saved=[];
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
 const ICO_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
-const ICO_OK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
 const ICO_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const ICO_EDIT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
 
 function showErr(m){const e=$('#err');e.innerHTML=ICO_WARN+'<span>'+esc(m)+'</span>';e.classList.remove('hide');e.scrollIntoView({block:'nearest'});}
 function clearErr(){$('#err').classList.add('hide');}
@@ -442,10 +503,64 @@ async function addFiles(list){
   renderShots();
 }
 function renderShots(){
-  $('#shots').innerHTML=photos.map((p,i)=>`<div class="shot"><img src="${p.thumb}" alt=""><button data-i="${i}" aria-label="Remover">&times;</button></div>`).join('');
+  $('#shots').innerHTML=photos.map((p,i)=>`<div class="shot"><img src="${p.thumb}" alt="">
+    <div class="btns">
+      <button class="edit" data-edit="${i}" aria-label="Editar" title="Editar">${ICO_EDIT}</button>
+      <button class="rm" data-i="${i}" aria-label="Remover">&times;</button>
+    </div></div>`).join('');
   $('#btn-id').disabled=!photos.length;
   renderPreview();
 }
+
+/* ---------- editor de imagem ---------- */
+let cropper=null, editIndex=-1, flipped=1;
+function updateEditorFilter(){
+  const b=$('#ed-bright').value,c=$('#ed-contrast').value,s=$('#ed-sat').value;
+  $('#ed-bright-v').textContent=b+'%';$('#ed-contrast-v').textContent=c+'%';$('#ed-sat-v').textContent=s+'%';
+  $('#editor-img').style.filter=`brightness(${b}%) contrast(${c}%) saturate(${s}%)`;
+}
+function openEditor(i){
+  editIndex=i;flipped=1;
+  const img=$('#editor-img');
+  $('#ed-bright').value=100;$('#ed-contrast').value=100;$('#ed-sat').value=100;
+  updateEditorFilter();
+  $('#editor-overlay').classList.remove('hide');
+  const start=()=>{
+    if(cropper){cropper.destroy();cropper=null;}
+    cropper=new Cropper(img,{viewMode:1,background:false,autoCropArea:1,zoomOnWheel:true});
+  };
+  img.onload=start;
+  img.src=photos[i].full;
+  if(img.complete&&img.naturalWidth)start();
+}
+function closeEditor(){
+  if(cropper){cropper.destroy();cropper=null;}
+  $('#editor-overlay').classList.add('hide');
+  editIndex=-1;
+}
+['ed-bright','ed-contrast','ed-sat'].forEach(id=>$('#'+id).addEventListener('input',updateEditorFilter));
+$('#ed-rotate-l').onclick=()=>cropper&&cropper.rotate(-90);
+$('#ed-rotate-r').onclick=()=>cropper&&cropper.rotate(90);
+$('#ed-flip').onclick=()=>{flipped*=-1;cropper&&cropper.scaleX(flipped);};
+$('#ed-reset').onclick=()=>{
+  $('#ed-bright').value=100;$('#ed-contrast').value=100;$('#ed-sat').value=100;updateEditorFilter();
+  flipped=1;cropper&&cropper.reset();
+};
+$('#ed-cancel').onclick=closeEditor;
+$('#ed-apply').onclick=()=>{
+  if(!cropper||editIndex<0){closeEditor();return;}
+  const canvas=cropper.getCroppedCanvas({maxWidth:1400,maxHeight:1400});
+  const out=document.createElement('canvas');out.width=canvas.width;out.height=canvas.height;
+  const ctx=out.getContext('2d');
+  ctx.filter=`brightness(${$('#ed-bright').value}%) contrast(${$('#ed-contrast').value}%) saturate(${$('#ed-sat').value}%)`;
+  ctx.drawImage(canvas,0,0);
+  const full=out.toDataURL('image/jpeg',.85);
+  const s=Math.min(1,150/Math.max(out.width,out.height));
+  const tc=document.createElement('canvas');tc.width=Math.round(out.width*s);tc.height=Math.round(out.height*s);
+  tc.getContext('2d').drawImage(out,0,0,tc.width,tc.height);
+  photos[editIndex]={full,thumb:tc.toDataURL('image/jpeg',.7)};
+  closeEditor();renderShots();toast('Foto editada');
+};
 
 function blank(){return {code:'',variant:'',name:'',rarity:'',category:'',colors:[],cost:null,power:null,types:[],effect:'',liga:null,confidence:'manual',verified:false,preco:'',pct_manual:'',estado:'Mint'};}
 
@@ -495,7 +610,7 @@ function renderCards(){
     const p=pctAtual(c);
     const atualizado=c.liga&&c.liga.atualizado?new Date(c.liga.atualizado).toLocaleDateString('pt-BR'):null;
     const ligaLinha=c.liga
-      ? `Último preço conhecido da Liga: <b>${brl(c.liga.preco)}</b> <span style="opacity:.6">(${esc(c.liga.catalog_id)}${atualizado?' · atualizado em '+atualizado:''})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}`
+      ? `Último preço conhecido da Liga: <b>${brl(c.liga.preco)}</b> <span style="opacity:.6">(${esc(c.liga.catalog_id)}${atualizado?' · atualizado em '+atualizado:''})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}${c.liga.url?` <button class="btn ghost sm" data-refresh="${i}" style="margin-left:4px;padding:2px 9px;font-size:11.5px">Atualizar</button>`:''}`
       : 'Sem preço de referência da Liga para esta carta';
     const accent=(c.colors&&c.colors[0]&&COLORS[c.colors[0]])||'var(--primary)';
 
@@ -547,7 +662,7 @@ function renderPreview(){
     const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     wa.innerHTML=`<div class="bubble">${imgs}<div class="txt">${t?waFmt(t):'<i style="color:var(--wa-time)">sem texto ainda</i>'}</div><div class="time">${now} ✓✓</div></div>`;
   }
-  $('#btn-copy').disabled=!t;$('#btn-save').disabled=!t;
+  $('#btn-copy').disabled=!t;$('#btn-save').disabled=!t;$('#btn-copy-img').disabled=!photos.length;
 }
 
 function limpar(){
@@ -588,6 +703,18 @@ function renderSaved(){
       </div></div></div>`;}).join('');
 }
 
+async function dataURLtoPngBlob(dataUrl){
+  return new Promise((res)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
+      c.getContext('2d').drawImage(img,0,0);
+      c.toBlob(b=>res(b),'image/png');
+    };
+    img.src=dataUrl;
+  });
+}
+
 $('#drop').onclick=()=>$('#file').click();
 $('#drop').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#file').click();}};
 $('#file').onchange=e=>{addFiles(e.target.files);e.target.value='';};
@@ -595,7 +722,11 @@ $('#file').onchange=e=>{addFiles(e.target.files);e.target.value='';};
 ['dragleave','drop'].forEach(ev=>$('#drop').addEventListener(ev,e=>{e.preventDefault();$('#drop').classList.remove('over');}));
 $('#drop').addEventListener('drop',e=>addFiles(e.dataTransfer.files));
 document.addEventListener('paste',e=>{if(e.clipboardData&&e.clipboardData.files.length)addFiles(e.clipboardData.files);});
-$('#shots').onclick=e=>{const b=e.target.closest('button[data-i]');if(!b)return;photos.splice(+b.dataset.i,1);renderShots();};
+$('#shots').addEventListener('click',e=>{
+  const rm=e.target.closest('button[data-i]'),ed=e.target.closest('button[data-edit]');
+  if(rm){photos.splice(+rm.dataset.i,1);renderShots();return;}
+  if(ed){openEditor(+ed.dataset.edit);}
+});
 $('#btn-id').onclick=identify;
 $('#btn-manual').onclick=()=>{if(!cards.length)cards=[blank()];renderCards();};
 $('#btn-add').onclick=()=>{cards.push(blank());renderCards();};
@@ -616,15 +747,48 @@ $('#cards').addEventListener('input',e=>{
   }
 });
 $('#cards').addEventListener('click',e=>{
-  const b=e.target.closest('button[data-rm]');if(!b)return;
-  cards.splice(+b.dataset.rm,1);
-  if(!cards.length)$('#cards-wrap').classList.add('hide');
-  renderCards();});
+  const b=e.target.closest('button[data-rm]');
+  const rf=e.target.closest('button[data-refresh]');
+  if(b){
+    cards.splice(+b.dataset.rm,1);
+    if(!cards.length)$('#cards-wrap').classList.add('hide');
+    renderCards();
+    return;
+  }
+  if(rf)atualizarPreco(+rf.dataset.refresh);
+});
+async function atualizarPreco(i){
+  const c=cards[i];
+  if(!c.liga||!c.liga.url)return;
+  const btn=document.querySelector(`button[data-refresh="${i}"]`);
+  if(btn){btn.disabled=true;btn.textContent='Buscando…';}
+  try{
+    const d=await api('/api/atualizar-preco',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({liga_url:c.liga.url,code:c.code,variant:c.variant})});
+    cards[i]=Object.assign(c,d,{verified:true});
+    renderCards();
+    toast('Preço atualizado');
+  }catch(e){showErr('Não consegui atualizar: '+e.message);}
+}
 $('#btn-gen').onclick=generate;
 $('#seg').onclick=e=>{const b=e.target.closest('button[data-m]');if(!b)return;
   mode=b.dataset.m;$$('#seg button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.m===mode)));renderPreview();};
 $('#btn-copy').onclick=async()=>{try{await navigator.clipboard.writeText(txtAtual());toast('Texto copiado');}
   catch(e){showErr('O navegador bloqueou a cópia. Selecione o texto na prévia.');}};
+$('#btn-copy-img').onclick=async()=>{
+  if(!photos.length)return;
+  try{
+    const blobs=await Promise.all(photos.map(p=>dataURLtoPngBlob(p.full)));
+    await navigator.clipboard.write(blobs.map(b=>new ClipboardItem({'image/png':b})));
+    toast(photos.length>1?'Imagens copiadas':'Imagem copiada');
+  }catch(e){
+    try{
+      const blob=await dataURLtoPngBlob(photos[0].full);
+      await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+      toast(photos.length>1?'Copiada só a 1ª imagem (o navegador não aceitou várias)':'Imagem copiada');
+    }catch(e2){showErr('O navegador bloqueou a cópia de imagem.');}
+  }
+};
 $('#btn-save').onclick=salvar;
 $('#btn-clear').onclick=limpar;
 $('#saved').addEventListener('click',async e=>{
