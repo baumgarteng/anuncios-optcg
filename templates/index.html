@@ -626,7 +626,7 @@ function hintHTML(i){
   const p=pctAtual(c);
   const atualizado=c.liga.atualizado?new Date(c.liga.atualizado).toLocaleDateString('pt-BR'):null;
   const acoes=c.liga.url?` <button class="btn ghost sm" data-refresh="${i}" style="margin-left:4px;padding:2px 9px;font-size:11.5px">Atualizar</button>`
-    +` <button class="btn ghost sm" data-hist="${i}" style="margin-left:4px;padding:2px 9px;font-size:11.5px">${ICO_CHART}Histórico</button>`:'';
+    +` <button class="btn ghost sm" data-hist="${i}" style="margin-left:4px;padding:2px 9px;font-size:11.5px">Histórico</button>`:'';
   return `Último preço conhecido da Liga: <b>${brl(c.liga.preco)}</b> <span style="opacity:.6">(${esc(c.liga.codigo||'')}${atualizado?' · atualizado em '+atualizado:''})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}${acoes}`;
 }
 function updateCardHint(i){
@@ -655,7 +655,7 @@ function renderCards(){
           <p class="cardname">${esc(c.name)||'Carta sem nome'}</p>
           <div class="code mono">${esc(c.code)||'sem código'}${c.variant?'-'+esc(c.variant):''}</div>
           <div class="chips">${chips.join('')}</div>
-          ${c.effect?`<div class="hint" style="margin-top:8px;max-width:52ch">${esc(c.effect.slice(0,150))}${c.effect.length>150?'…':''}</div>`:''}
+          ${c.effect?`<div class="hint" data-effect="${i}" style="margin-top:8px;max-width:52ch">${esc(c.effect.length>150?c.effect.slice(0,150)+'…':c.effect)}${c.effect.length>150?` <button class="btn ghost sm" data-readmore="${i}" style="padding:1px 8px;font-size:11px">Ler mais</button>`:''}</div>`:''}
         </div>
         <button class="btn danger sm" data-rm="${i}">Remover</button>
       </div>
@@ -805,6 +805,7 @@ $('#cards').addEventListener('click',e=>{
   const b=e.target.closest('button[data-rm]');
   const rf=e.target.closest('button[data-refresh]');
   const hs=e.target.closest('button[data-hist]');
+  const rm2=e.target.closest('button[data-readmore]');
   if(b){
     cards.splice(+b.dataset.rm,1);
     if(!cards.length)$('#cards-wrap').classList.add('hide');
@@ -813,7 +814,19 @@ $('#cards').addEventListener('click',e=>{
   }
   if(rf)atualizarPreco(+rf.dataset.refresh);
   if(hs)abrirHistorico(+hs.dataset.hist);
+  if(rm2)lerMais(+rm2.dataset.readmore);
 });
+async function lerMais(i){
+  const el=document.querySelector(`[data-effect="${i}"]`);
+  if(!el)return;
+  const original=el.innerHTML;
+  el.textContent='Traduzindo…';
+  try{
+    const d=await api('/api/traduzir',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({texto:cards[i].effect})});
+    el.textContent=d.traduzido;
+  }catch(e){el.innerHTML=original;showErr('Não consegui traduzir: '+e.message);}
+}
 async function atualizarPreco(i,opts){
   opts=opts||{};
   const c=cards[i];

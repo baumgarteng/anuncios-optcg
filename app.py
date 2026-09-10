@@ -58,16 +58,22 @@ def init_db():
 # ---------------------------------------------------------------- catálogo
 BASE_RE = re.compile(r"^([A-Z0-9]+-\d+)", re.I)
 
-# variante informada -> sufixos de catalog_id, na ordem de preferência
+# sufixo REAL da Liga BR (liga_suffix) que corresponde a cada variante que o
+# usuário pode digitar. Fonte: a mesma tabela usada pelo scanner do
+# optcg-cloud (_LIGA_SUFFIX_VARIANT/_LIGA_SUFFIX_MEANING) — AA=Alt Art,
+# SP=Special/parallel, MA=Manga, TF=Textured Foil. Nunca casamos pelo número
+# interno _p1/_p2 do catalog_id: esse número é só ordem de importação, não
+# diz qual variante é (_p1 pode ser "-CC" Premium Card Collection, _p2 pode
+# ser "-AA", varia carta a carta — usar isso como se fosse a variante pedida
+# foi o bug que misturava preço de uma variante errada).
 VARIANTES = {
-    "":   ["", "_pa"],
-    "AA": ["_aa", "_p1"],
-    "SA": ["_aa", "_p1"],
-    "SP": ["_ma", "_p2"],
-    "MA": ["_ma", "_p2"],
-    "SEC": ["", "_p1"],
-    "TR": ["_tr", ""],
-    "SF": ["", "_p1"],
+    "":   [None],
+    "AA": ["AA"],
+    "SA": ["AA"],
+    "SP": ["SP"],
+    "MA": ["MA"],
+    "TR": ["TR"],
+    "SF": ["TF", "SF"],
 }
 
 
@@ -82,7 +88,7 @@ def buscar_carta(code, variant=""):
     if not base:
         return None
     variant = (variant or "").strip().upper()
-    sufixos = VARIANTES.get(variant, ["_" + variant.lower(), "_p1", ""])
+    alvo = VARIANTES.get(variant, [variant or None])
 
     with conn() as c, c.cursor() as cur:
         cur.execute(
@@ -101,23 +107,20 @@ def buscar_carta(code, variant=""):
         # a linha base é a mais completa; algumas importações vêm vazias
         carta = next((l for l in linhas if l["rarity"]), linhas[0])
 
-        # preço de referência: tenta os sufixos na ordem, depois qualquer um do base
+        # preço de referência: casa pelo sufixo real da Liga. Se a variante
+        # pedida não tem sufixo correspondente com preço, liga fica None —
+        # nunca empresta o preço de outra variante só porque existe alguma.
         cur.execute(
             """SELECT catalog_id, liga_code, liga_price, liga_preco_min, liga_preco_max,
                       liga_suffix, liga_page_url, updated_at
                  FROM liga_catalog_map
-                WHERE base_code = %s AND liga_price IS NOT NULL""",
+                WHERE base_code = %s AND liga_price IS NOT NULL
+                ORDER BY updated_at DESC NULLS LAST""",
             (base,),
         )
-        precos = {p["catalog_id"]: p for p in cur.fetchall()}
+        candidatos = cur.fetchall()
 
-    ref = None
-    for suf in sufixos:
-        if base + suf in precos:
-            ref = precos[base + suf]
-            break
-    if ref is None and precos:
-        ref = sorted(precos.values(), key=lambda p: p["liga_price"])[0]
+    ref = next((p for p in candidatos if (p["liga_suffix"] or None) in alvo), None)
 
     def limpa(v):
         if not v:
@@ -174,11 +177,18 @@ def claude(messages, max_tokens=1400):
 
 
 def parse_json(txt):
+    """Extrai o primeiro objeto JSON da resposta, ignorando qualquer texto
+    que venha antes ou depois — a IA às vezes escreve um comentário depois
+    do JSON, o que quebrava o find('{')/rfind('}') antigo com 'Extra data'."""
     t = txt.replace("```json", "").replace("```", "").strip()
-    a, b = t.find("{"), t.rfind("}")
-    if a < 0 or b < 0:
+    a = t.find("{")
+    if a < 0:
         raise ValueError("resposta sem JSON")
-    return json.loads(t[a:b + 1])
+    try:
+        obj, _ = json.JSONDecoder().raw_decode(t, a)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"JSON inválido na resposta: {e}")
+    return obj
 
 
 # ---------------------------------------------------------------- rotas
@@ -242,6 +252,23 @@ def api_historico_preco():
             return jsonify(json.loads(r.read()))
     except Exception as e:
         return jsonify(erro=f"histórico indisponível: {e}"), 502
+
+
+@app.post("/api/traduzir")
+def api_traduzir():
+    body = request.json or {}
+    texto = (body.get("texto") or "").strip()
+    if not texto:
+        return jsonify(erro="texto obrigatório"), 400
+    try:
+        traduzido = claude([{"role": "user", "content": (
+            "Traduza este texto de efeito de carta do One Piece Card Game para português do Brasil. "
+            "Mantenha termos de jogo entre colchetes como estão (ex.: [Blocker], [On Play], [DON!!x1]), "
+            "traduzindo só o texto ao redor deles. Responda SÓ com a tradução, sem aspas, sem comentário, "
+            "sem markdown:\n\n" + texto)}], 400)
+    except Exception as e:
+        return jsonify(erro=f"falha ao traduzir: {e}"), 502
+    return jsonify(traduzido=traduzido.strip())
 
 
 @app.post("/api/identificar")
