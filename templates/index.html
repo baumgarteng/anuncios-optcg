@@ -934,8 +934,11 @@ $('#cards').addEventListener('click',e=>{
   const ve=e.target.closest('button[data-verso-edit]');
   const vr=e.target.closest('button[data-verso-rm]');
   if(b){
-    cards.splice(+b.dataset.rm,1);
+    const idx=+b.dataset.rm;
+    cards.splice(idx,1);
+    if(photos[idx]!==undefined)photos.splice(idx,1);
     if(!cards.length)$('#cards-wrap').classList.add('hide');
+    renderShots();
     renderCards();
     return;
   }
