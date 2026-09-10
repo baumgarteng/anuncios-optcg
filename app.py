@@ -285,23 +285,35 @@ def api_identificar():
     content.append({"type": "text", "text": (
         "Estas fotos são de cartas do One Piece Card Game à venda. Identifique CADA carta distinta.\n\n"
         "O código está impresso na carta, no canto inferior direito: OP17-062, ST01-001, EB01-006, "
-        "DON-003, P-084. Leia da imagem, não adivinhe.\n\n"
-        "Sufixos de variante quando visíveis: AA (alternate art), SA (super alternate art), "
-        "SP ou MA (manga rare), TR (treasure rare), SF (foil especial).\n\n"
+        "DON-003, P-084. Leia da imagem, não adivinhe — se não conseguir ler com confiança, deixe "
+        "code vazio e confidence baixa.\n\n"
+        "Classifique variant_type pela ARTE da carta, NÃO por uma sigla impressa (a maioria das "
+        "cartas não imprime sufixo de variante nenhum):\n"
+        '- "base": arte padrão do set, composição normal, moldura colorida, texto de efeito legível\n'
+        '- "alt_art": ilustração alternativa — arte bem diferente da base, geralmente sangria total '
+        "(a arte cobre a carta inteira sem moldura), composição mais dramática\n"
+        '- "manga": arte em preto e branco estilo mangá\n'
+        '- "serial": tem número de série impresso (ex.: 0123/1500)\n'
+        "Leia a cor pela mandala/roda de cores no canto inferior esquerdo da carta, não pela "
+        "ilustração.\n\n"
         "Responda SÓ com JSON, sem markdown:\n"
-        '{"cards":[{"code":"OP17-062","variant":"SA","name":"Kaido","confidence":"alta"}]}\n\n'
-        "variant é string vazia na arte normal. confidence é alta, media ou baixa. "
-        "Se não conseguir ler o código, deixe code vazio e confidence baixa.")})
+        '{"cards":[{"code":"OP17-062","variant_type":"alt_art","name":"Kaido","confidence":"alta"}]}\n\n'
+        "confidence é alta, media ou baixa.")})
 
     try:
         data = parse_json(claude([{"role": "user", "content": content}], 1000))
     except Exception as e:
         return jsonify(erro=f"falha na identificação: {e}"), 502
 
+    # A variante vem da classificação visual da arte (variant_type), nunca de uma sigla lida —
+    # esse mapeamento é fixo e controlado aqui, não um chute da IA (mesmo princípio de não
+    # inventar variante usado em buscar_carta).
+    VARIANT_TYPE_TO_VARIANT = {"alt_art": "AA", "manga": "MA", "base": "", "serial": "", "reprint": ""}
+
     saida = []
     for c in data.get("cards", [])[:6]:
         code = (c.get("code") or "").upper().strip()
-        variant = (c.get("variant") or "").upper().strip()
+        variant = VARIANT_TYPE_TO_VARIANT.get((c.get("variant_type") or "").lower().strip(), "")
         item = {"code": code, "variant": variant, "name": c.get("name") or "",
                 "confidence": c.get("confidence") or "media", "verified": False}
         try:

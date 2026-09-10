@@ -411,11 +411,10 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
           </div>
         </div>
         <div class="row" style="margin-top:14px">
-          <button class="btn" id="btn-copy-all" disabled>Copiar tudo</button>
-          <button class="btn ghost sm" id="btn-copy" disabled>Só texto</button>
-          <button class="btn ghost sm" id="btn-copy-img" disabled>Só imagens</button>
+          <button class="btn" id="btn-copy" disabled style="flex:1">Copiar texto</button>
+          <button class="btn" id="btn-copy-img" disabled style="flex:1">Copiar imagens</button>
         </div>
-        <div class="hint" style="margin-top:6px">No WhatsApp o app prioriza a imagem: cole a foto primeiro (abre a legenda), depois cole o texto ali dentro.</div>
+        <div class="hint" style="margin-top:6px">No WhatsApp: cole a imagem primeiro (abre a legenda), depois cole o texto ali dentro.</div>
         <div class="row" style="margin-top:12px">
           <button class="btn ghost" id="btn-save" disabled>Salvar no banco</button>
           <button class="btn danger sm" id="btn-clear">Limpar</button>
@@ -473,6 +472,17 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
   </div>
 </div>
 
+<div class="editor-overlay hide" id="detail-overlay">
+  <div class="editor-panel" style="max-width:480px">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span id="detail-title">Carta</span></h3>
+    <div id="detail-body"></div>
+    <div class="editor-actions">
+      <button class="btn ghost sm" id="detail-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-verso" accept="image/*" class="hide">
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <script>
 const COLORS={Red:'#C0392B',Green:'#2E7D5B',Blue:'#2C6FA8',Purple:'#7A4E9E',Yellow:'#C79A1E',Black:'#33383D'};
@@ -533,7 +543,7 @@ function renderShots(){
 }
 
 /* ---------- editor de imagem ---------- */
-let cropper=null, editIndex=-1, flipped=1, rot90=0;
+let cropper=null, editTarget=null, flipped=1, rot90=0;
 function updateEditorFilter(){
   const b=$('#ed-bright').value,c=$('#ed-contrast').value,s=$('#ed-sat').value;
   $('#ed-bright-v').textContent=b+'%';$('#ed-contrast-v').textContent=c+'%';$('#ed-sat-v').textContent=s+'%';
@@ -545,8 +555,8 @@ function applyRotation(){
   $('#ed-align-v').textContent=fine.toFixed(1)+'°';
   if(cropper)cropper.rotateTo(rot90+fine);
 }
-function openEditor(i){
-  editIndex=i;flipped=1;rot90=0;
+function openEditor(target){
+  editTarget=target;flipped=1;rot90=0;
   const img=$('#editor-img');
   $('#ed-bright').value=100;$('#ed-contrast').value=100;$('#ed-sat').value=100;$('#ed-align').value=0;
   updateEditorFilter();
@@ -556,13 +566,13 @@ function openEditor(i){
     cropper=new Cropper(img,{viewMode:1,background:false,autoCropArea:1,zoomOnWheel:true});
   };
   img.onload=start;
-  img.src=photos[i].full;
+  img.src=target.type==='verso'?cards[target.i].verso.full:photos[target.i].full;
   if(img.complete&&img.naturalWidth)start();
 }
 function closeEditor(){
   if(cropper){cropper.destroy();cropper=null;}
   $('#editor-overlay').classList.add('hide');
-  editIndex=-1;
+  editTarget=null;
 }
 ['ed-bright','ed-contrast','ed-sat'].forEach(id=>$('#'+id).addEventListener('input',updateEditorFilter));
 $('#ed-align').addEventListener('input',applyRotation);
@@ -576,7 +586,7 @@ $('#ed-reset').onclick=()=>{
 };
 $('#ed-cancel').onclick=closeEditor;
 $('#ed-apply').onclick=()=>{
-  if(!cropper||editIndex<0){closeEditor();return;}
+  if(!cropper||!editTarget){closeEditor();return;}
   const canvas=cropper.getCroppedCanvas({maxWidth:1400,maxHeight:1400});
   const out=document.createElement('canvas');out.width=canvas.width;out.height=canvas.height;
   const ctx=out.getContext('2d');
@@ -586,11 +596,13 @@ $('#ed-apply').onclick=()=>{
   const s=Math.min(1,150/Math.max(out.width,out.height));
   const tc=document.createElement('canvas');tc.width=Math.round(out.width*s);tc.height=Math.round(out.height*s);
   tc.getContext('2d').drawImage(out,0,0,tc.width,tc.height);
-  photos[editIndex]={full,thumb:tc.toDataURL('image/jpeg',.7)};
-  closeEditor();renderShots();toast('Foto editada');
+  const resultado={full,thumb:tc.toDataURL('image/jpeg',.7)};
+  if(editTarget.type==='verso'){cards[editTarget.i].verso=resultado;renderCards();}
+  else{photos[editTarget.i]=resultado;renderShots();}
+  closeEditor();toast('Foto editada');
 };
 
-function blank(){return {code:'',variant:'',name:'',rarity:'',category:'',colors:[],cost:null,power:null,types:[],effect:'',liga:null,confidence:'manual',verified:false,preco:'',pct_manual:'',estado:'Mint',quantidade:1};}
+function blank(){return {code:'',variant:'',name:'',rarity:'',category:'',colors:[],cost:null,power:null,types:[],effect:'',liga:null,confidence:'manual',verified:false,preco:'',pct_manual:'',estado:'Mint',quantidade:1,verso:null,image_url:null};}
 function aplicarPrecoConhecido(c){if(c.liga&&c.liga.preco!=null)c.preco=String(c.liga.preco);return c;}
 
 async function identify(){
@@ -661,7 +673,10 @@ function renderCards(){
           <div class="chips">${chips.join('')}</div>
           ${c.effect?`<div class="hint" data-effect="${i}" style="margin-top:8px;max-width:52ch">${esc(c.effect.length>150?c.effect.slice(0,150)+'…':c.effect)}${c.effect.length>150?` <button class="btn ghost sm" data-readmore="${i}" style="padding:1px 8px;font-size:11px">Ler mais</button>`:''}</div>`:''}
         </div>
-        <button class="btn danger sm" data-rm="${i}">Remover</button>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0">
+          <button class="btn ghost sm" data-detail="${i}">Ver carta</button>
+          <button class="btn danger sm" data-rm="${i}">Remover</button>
+        </div>
       </div>
       <div class="fields">
         <div><label>Código</label><input class="mono" data-f="code" data-i="${i}" value="${esc(c.code)}" placeholder="OP17-062"></div>
@@ -670,6 +685,18 @@ function renderCards(){
         <div><label>Quantidade</label><input type="number" min="1" step="1" data-f="quantidade" data-i="${i}" value="${c.quantidade||1}"></div>
         <div><label>Preço (R$)</label><input inputmode="decimal" data-f="preco" data-i="${i}" value="${c.preco}" placeholder="425,00"></div>
         <div><label title="${c.liga?'Ajusta o preço sozinho':'Sem referência da Liga pra esta carta'}">% MDL</label><input type="number" step="1" data-f="pct_manual" data-i="${i}" value="${c.pct_manual}" placeholder="ex.: 10" ${c.liga?'':'disabled'}></div>
+      </div>
+      <div style="margin-top:10px">
+        <label>Foto do verso (opcional)</label>
+        ${c.verso
+          ?`<div class="shot" style="width:56px;height:78px">
+              <img src="${c.verso.thumb}" alt="">
+              <div class="btns">
+                <button class="edit" data-verso-edit="${i}" title="Editar verso">${ICO_EDIT}</button>
+                <button class="rm" data-verso-rm="${i}" title="Remover verso">&times;</button>
+              </div>
+            </div>`
+          :`<button class="btn ghost sm" data-verso-add="${i}">+ Adicionar foto do verso</button>`}
       </div>
       <div class="hint" data-hint="${i}" style="margin-top:9px">${hintHTML(i)}</div>
     </div>`;}).join('');
@@ -702,8 +729,9 @@ function renderPreview(){
     const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     wa.innerHTML=`<div class="bubble">${imgs}<div class="txt">${t?waFmt(t):'<i style="color:var(--wa-time)">sem texto ainda</i>'}</div><div class="time">${now} ✓✓</div></div>`;
   }
-  $('#btn-copy').disabled=!t;$('#btn-save').disabled=!t;$('#btn-copy-img').disabled=!photos.length;
-  $('#btn-copy-all').disabled=!t&&!photos.length;
+  $('#btn-copy').disabled=!t;$('#btn-save').disabled=!t;
+  $('#btn-copy-img').disabled=!photos.length;
+  $('#btn-copy-img').textContent=photos.length>1?`Copiar imagens (${photos.length})`:'Copiar imagens';
 }
 
 function limpar(){
@@ -766,7 +794,7 @@ document.addEventListener('paste',e=>{if(e.clipboardData&&e.clipboardData.files.
 $('#shots').addEventListener('click',e=>{
   const rm=e.target.closest('button[data-i]'),ed=e.target.closest('button[data-edit]');
   if(rm){photos.splice(+rm.dataset.i,1);renderShots();return;}
-  if(ed){openEditor(+ed.dataset.edit);}
+  if(ed){openEditor({type:'photo',i:+ed.dataset.edit});}
 });
 $('#btn-id').onclick=identify;
 $('#btn-manual').onclick=()=>{if(!cards.length)cards=[blank()];renderCards();};
@@ -805,11 +833,16 @@ $('#cards').addEventListener('input',e=>{
   cards[i][f]=el.value;
   if(f==='quantidade')renderPreview();
 });
+let versoAlvo=-1;
 $('#cards').addEventListener('click',e=>{
   const b=e.target.closest('button[data-rm]');
   const rf=e.target.closest('button[data-refresh]');
   const hs=e.target.closest('button[data-hist]');
   const rm2=e.target.closest('button[data-readmore]');
+  const dt=e.target.closest('button[data-detail]');
+  const va=e.target.closest('button[data-verso-add]');
+  const ve=e.target.closest('button[data-verso-edit]');
+  const vr=e.target.closest('button[data-verso-rm]');
   if(b){
     cards.splice(+b.dataset.rm,1);
     if(!cards.length)$('#cards-wrap').classList.add('hide');
@@ -819,7 +852,39 @@ $('#cards').addEventListener('click',e=>{
   if(rf)atualizarPreco(+rf.dataset.refresh);
   if(hs)abrirHistorico(+hs.dataset.hist);
   if(rm2)lerMais(+rm2.dataset.readmore);
+  if(dt)abrirDetalhe(+dt.dataset.detail);
+  if(va){versoAlvo=+va.dataset.versoAdd;$('#file-verso').click();}
+  if(ve)openEditor({type:'verso',i:+ve.dataset.versoEdit});
+  if(vr){cards[+vr.dataset.versoRm].verso=null;renderCards();}
 });
+$('#file-verso').onchange=async e=>{
+  const f=e.target.files[0];
+  e.target.value='';
+  if(!f||versoAlvo<0)return;
+  try{
+    cards[versoAlvo].verso={full:await resize(f,900,.78),thumb:await resize(f,150,.7)};
+    renderCards();
+  }catch(err){showErr('Não consegui ler a foto do verso.');}
+};
+function abrirDetalhe(i){
+  const c=cards[i];
+  $('#detail-title').textContent=(c.name||'Carta sem nome')+(c.code?' · '+c.code+(c.variant?'-'+c.variant:''):'');
+  const chips=[];
+  (c.colors||[]).forEach(x=>{if(COLORS[x])chips.push(`<span class="chip col" style="background:${COLORS[x]}">${x}</span>`);});
+  if(c.rarity)chips.push(`<span class="chip">${RAR[c.rarity]||c.rarity}</span>`);
+  if(c.category)chips.push(`<span class="chip">${c.category}</span>`);
+  if(c.cost!=null)chips.push(`<span class="chip">Custo ${c.cost}</span>`);
+  if(c.power!=null)chips.push(`<span class="chip">${c.power}</span>`);
+  const imgs=[];
+  if(c.image_url)imgs.push(`<div><div class="hint" style="margin-bottom:4px">Imagem oficial</div><img src="${c.image_url}" style="width:100%;border-radius:8px;border:1px solid var(--border);display:block"></div>`);
+  if(c.verso)imgs.push(`<div><div class="hint" style="margin-bottom:4px">Verso (sua foto)</div><img src="${c.verso.full}" style="width:100%;border-radius:8px;border:1px solid var(--border);display:block"></div>`);
+  $('#detail-body').innerHTML=`
+    <div class="chips" style="margin-bottom:10px">${chips.join('')||'<span class="hint">Sem dados de catálogo</span>'}</div>
+    ${imgs.length?`<div style="display:grid;grid-template-columns:${imgs.length>1?'1fr 1fr':'1fr'};gap:10px;margin-bottom:10px">${imgs.join('')}</div>`:'<div class="hint" style="margin-bottom:10px">Sem imagem oficial disponível pra essa carta.</div>'}
+    ${c.effect?`<div class="hint">${esc(c.effect)}</div>`:''}`;
+  $('#detail-overlay').classList.remove('hide');
+}
+$('#detail-close').onclick=()=>$('#detail-overlay').classList.add('hide');
 async function lerMais(i){
   const el=document.querySelector(`[data-effect="${i}"]`);
   if(!el)return;
@@ -909,31 +974,17 @@ $('#seg').onclick=e=>{const b=e.target.closest('button[data-m]');if(!b)return;
   mode=b.dataset.m;$$('#seg button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.m===mode)));renderPreview();};
 $('#btn-copy').onclick=async()=>{try{await navigator.clipboard.writeText(txtAtual());toast('Texto copiado');}
   catch(e){showErr('O navegador bloqueou a cópia. Selecione o texto na prévia.');}};
-$('#btn-copy-all').onclick=async()=>{
-  const t=txtAtual();
-  try{
-    const items={};
-    if(t)items['text/plain']=new Blob([t],{type:'text/plain'});
-    if(photos.length)items['image/png']=await dataURLtoPngBlob(photos[0].full);
-    if(!Object.keys(items).length)return;
-    await navigator.clipboard.write([new ClipboardItem(items)]);
-    toast(t&&photos.length?'Texto e imagem copiados — cole a imagem, depois o texto como legenda':t?'Texto copiado':'Imagem copiada');
-  }catch(e){
-    try{await navigator.clipboard.writeText(t);toast('Copiado só o texto (imagem bloqueada)');}
-    catch(e2){showErr('O navegador bloqueou a cópia.');}
-  }
-};
 $('#btn-copy-img').onclick=async()=>{
   if(!photos.length)return;
   try{
     const blobs=await Promise.all(photos.map(p=>dataURLtoPngBlob(p.full)));
     await navigator.clipboard.write(blobs.map(b=>new ClipboardItem({'image/png':b})));
-    toast(photos.length>1?'Imagens copiadas':'Imagem copiada');
+    toast(photos.length>1?`${photos.length} imagens copiadas`:'Imagem copiada');
   }catch(e){
     try{
       const blob=await dataURLtoPngBlob(photos[0].full);
       await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
-      toast(photos.length>1?'Copiada só a 1ª imagem (o navegador não aceitou várias)':'Imagem copiada');
+      toast(photos.length>1?`O navegador só aceitou 1 de ${photos.length} imagens — cole essa e repita pra pegar as outras`:'Imagem copiada');
     }catch(e2){showErr('O navegador bloqueou a cópia de imagem.');}
   }
 };
