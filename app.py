@@ -358,9 +358,11 @@ REGRAS = """REGRAS OBRIGATÓRIAS:
 - Sempre comece com uma chamada curta e chamativa sobre a carta ou personagem (pode ter 1 emoji nela,
   só nela), seguida da linha com nome e código em negrito: *Nome da carta | CODIGO-VARIANTE*
   (negrito do WhatsApp é *asterisco simples* de cada lado — nunca use ** duplo nem outro markdown).
-- Linha de preço logo depois, exatamente como veio na ficha, seguida de "+ frete". Se pct_abaixo_mdl
-  vier preenchido, acrescente entre parênteses no formato "(-X% MDL)". Se vier nulo, não escreva nada
-  sobre desconto ou referência de preço.
+- Linha de preço logo depois, EXATAMENTE como veio na ficha (copie o texto do campo "preco" sem
+  alterar um caractere), seguida de "+ frete". Formato brasileiro de moeda: vírgula pros centavos,
+  ponto pros milhares — nunca escreva ponto como separador de centavos (R$ 279,18 está certo,
+  R$ 279.18 está errado). Se pct_abaixo_mdl vier preenchido, acrescente entre parênteses no formato
+  "(-X% MDL)". Se vier nulo, não escreva nada sobre desconto ou referência de preço.
 - Linha de envio sempre igual, sem variar: "Envio por conta do comprador, saindo de Joinville/SC."
 - Se quantidade for maior que 1, informe quantas unidades estão disponíveis dessa carta.
 - Se falar de embalagem, use apenas a ideia "em sleeve e bem protegida". NUNCA mencione toploader,
@@ -434,6 +436,22 @@ def api_gerar():
         d = parse_json(claude([{"role": "user", "content": prompt}], 1600 + 400 * len(ficha)))
     except Exception as e:
         return jsonify(erro=f"falha ao gerar: {e}"), 502
+
+    # defesa extra: se o modelo trocar a vírgula por ponto num preço (formato
+    # americano) mesmo depois de instruído a não fazer isso, corrige aqui —
+    # sabemos exatamente qual string cada preço deveria ser, então é uma
+    # substituição exata, não um regex genérico chutando separador decimal.
+    precos_certos = [item["preco"] for item in ficha if item.get("preco")]
+    for campo in ("titulo", "curto", "completo"):
+        texto = d.get(campo)
+        if not texto:
+            continue
+        for preco_certo in precos_certos:
+            preco_errado = preco_certo.replace(",", ".")
+            if preco_errado != preco_certo:
+                texto = texto.replace(preco_errado, preco_certo)
+        d[campo] = texto
+
     return jsonify(titulo=d.get("titulo", ""), curto=d.get("curto", ""), completo=d.get("completo", ""))
 
 

@@ -839,10 +839,12 @@ $('#cards').addEventListener('input',e=>{
     return;
   }
   if(f==='preco'){
-    cards[i].preco=el.value.replace(',','.');
-    cards[i].pct_manual='';
+    const c=cards[i];
+    c.preco=el.value.replace(',','.');
+    const liga=c.liga&&c.liga.preco,p=Number(c.preco);
+    c.pct_manual=(liga&&p)?String(Math.round((p/liga-1)*100)):'';
     const pctInput=document.querySelector(`input[data-f="pct_manual"][data-i="${i}"]`);
-    if(pctInput)pctInput.value='';
+    if(pctInput)pctInput.value=c.pct_manual;
     updateCardHint(i);renderPreview();
     return;
   }
