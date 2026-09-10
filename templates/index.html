@@ -187,7 +187,8 @@ button{font-family:inherit}
 .chip.ok{background:var(--success-bg);color:#1f7a3d}
 .fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:520px){.fields{grid-template-columns:1fr}}
-label{display:block;font-size:12.5px;color:var(--muted-foreground);font-weight:600;margin-bottom:4px}
+label{display:block;font-size:12.5px;color:var(--muted-foreground);font-weight:600;margin-bottom:4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 input,select,textarea{
   width:100%;background:var(--input);border:1px solid var(--border);border-radius:8px;
   color:var(--foreground);padding:9px 11px;font-family:inherit;font-size:15px;transition:border-color .15s,box-shadow .15s;
@@ -413,8 +414,11 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
           <button class="btn" id="btn-copy-all" disabled>Copiar tudo</button>
           <button class="btn ghost sm" id="btn-copy" disabled>Só texto</button>
           <button class="btn ghost sm" id="btn-copy-img" disabled>Só imagens</button>
+        </div>
+        <div class="hint" style="margin-top:6px">No WhatsApp o app prioriza a imagem: cole a foto primeiro (abre a legenda), depois cole o texto ali dentro.</div>
+        <div class="row" style="margin-top:12px">
           <button class="btn ghost" id="btn-save" disabled>Salvar no banco</button>
-          <button class="btn ghost sm" id="btn-clear">Limpar</button>
+          <button class="btn danger sm" id="btn-clear">Limpar</button>
         </div>
       </div>
     </div>
@@ -665,7 +669,7 @@ function renderCards(){
         <div><label>Estado</label><select data-f="estado" data-i="${i}">${['Mint','Near Mint','Excelente','Bom'].map(o=>`<option ${c.estado===o?'selected':''}>${o}</option>`).join('')}</select></div>
         <div><label>Quantidade</label><input type="number" min="1" step="1" data-f="quantidade" data-i="${i}" value="${c.quantidade||1}"></div>
         <div><label>Preço (R$)</label><input inputmode="decimal" data-f="preco" data-i="${i}" value="${c.preco}" placeholder="425,00"></div>
-        <div><label>% abaixo da MDL${c.liga?' (ajusta o preço sozinho)':' (sem referência da liga)'}</label><input type="number" step="1" data-f="pct_manual" data-i="${i}" value="${c.pct_manual}" placeholder="ex.: 10" ${c.liga?'':'disabled'}></div>
+        <div><label title="${c.liga?'Ajusta o preço sozinho':'Sem referência da Liga pra esta carta'}">% MDL</label><input type="number" step="1" data-f="pct_manual" data-i="${i}" value="${c.pct_manual}" placeholder="ex.: 10" ${c.liga?'':'disabled'}></div>
       </div>
       <div class="hint" data-hint="${i}" style="margin-top:9px">${hintHTML(i)}</div>
     </div>`;}).join('');
@@ -933,8 +937,8 @@ $('#btn-copy-img').onclick=async()=>{
     }catch(e2){showErr('O navegador bloqueou a cópia de imagem.');}
   }
 };
-$('#btn-save').onclick=salvar;
-$('#btn-clear').onclick=limpar;
+$('#btn-save').onclick=()=>{if(confirm('Salvar este anúncio no banco?'))salvar();};
+$('#btn-clear').onclick=()=>{if(confirm('Limpar tudo e começar um novo anúncio?'))limpar();};
 $('#saved').addEventListener('click',async e=>{
   const c=e.target.closest('button[data-cp]'),d=e.target.closest('button[data-del]');
   if(c){const a=saved.find(x=>String(x.id)===c.dataset.cp);
