@@ -249,17 +249,18 @@ def api_identificar():
 
 
 REGRAS = """REGRAS OBRIGATÓRIAS:
-- Português brasileiro. Tom de colecionador para colecionador: entusiasmado e direto, nunca publicitário.
+- Português brasileiro. Direto, sem enrolação, sem tom publicitário.
+- NÃO mencione efeito, cor(es), custo, poder ou arquétipos/tipos da carta — essas informações não
+  entram no anúncio de jeito nenhum, mesmo que você saiba do universo One Piece.
+- A primeira linha é sempre o nome e código da carta em negrito, assim: *Nome da carta | CODIGO-VARIANTE*
+  (negrito do WhatsApp é *asterisco simples* de cada lado — nunca use ** duplo nem outro markdown).
+- Linha de preço logo depois, exatamente como veio na ficha, seguida de "+ frete". Se pct_abaixo_mdl
+  vier preenchido, acrescente entre parênteses no formato "(-X% MDL)". Se vier nulo, não escreva nada
+  sobre desconto ou referência de preço.
+- Linha de envio sempre igual, sem variar: "Envio por conta do comprador, saindo de Joinville/SC."
 - Se falar de embalagem, use apenas a ideia "em sleeve e bem protegida". NUNCA mencione toploader,
   caixa, plástico ou qualquer outro detalhe de embalagem.
-- Envio pelos Correios (SEDEX), saindo de Joinville/SC, com rastreio.
-- Preço exatamente como veio na ficha, seguido de "+ frete".
-- Só cite desconto se pct_abaixo_mdl vier preenchido, no formato "X% abaixo do valor de referência MDL".
-  Se vier nulo, não invente nada sobre referência de preço.
-- Não invente raridade, poder, efeito ou tiragem. Use só o que está na ficha. Você pode usar o que
-  se sabe do personagem no universo One Piece para escrever a chamada.
-- Negrito do WhatsApp é *asteriscos simples*. Nada de markdown, ## ou **.
-- Emojis com moderação, no início das linhas-chave."""
+- Nada de emoji, nada de chamada publicitária, nada de fechamento tipo "chama no privado"."""
 
 
 @app.post("/api/gerar")
@@ -282,9 +283,7 @@ def api_gerar():
             pct = int(c["pct_manual"])
         ficha.append({
             "codigo": c.get("code", "") + ("-" + c["variant"] if c.get("variant") else ""),
-            "nome": c.get("name"), "raridade": c.get("rarity"), "categoria": c.get("category"),
-            "cores": c.get("colors"), "custo": c.get("cost"), "poder": c.get("power"),
-            "arquetipos": c.get("types"), "efeito": c.get("effect"),
+            "nome": c.get("name"),
             "estado": c.get("estado") or "Mint",
             "preco": f"R$ {float(preco):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if preco else None,
             "pct_abaixo_mdl": pct,
@@ -297,10 +296,10 @@ def api_gerar():
         "\n\nOBSERVAÇÃO DO VENDEDOR: " + (body.get("observacao") or "nenhuma") +
         "\n\n" + REGRAS +
         '\n\nFORMATO — responda SÓ com este JSON:\n'
-        '{"titulo":"chamada com 1 emoji, curta e forte",'
-        '"curto":"anúncio de 4 a 6 linhas: chamada, carta e código, preço, uma linha de envio",'
-        '"completo":"anúncio de 10 a 16 linhas: chamada, o que torna a carta especial, carta e código, '
-        'preço e desconto, estado, envio e embalagem, fechamento convidando a chamar no privado"}'
+        '{"titulo":"*Nome da carta | CODIGO-VARIANTE*, em negrito, sem mais nada",'
+        '"curto":"3 a 4 linhas: título em negrito, preço + frete (com -X% MDL se houver), linha de envio",'
+        '"completo":"igual ao curto, pode acrescentar o estado da carta (Mint, Near Mint etc.) e a '
+        'observação do vendedor se houver — sem detalhes de jogo, sem enrolação"}'
     )
     try:
         d = parse_json(claude([{"role": "user", "content": prompt}], 1600))

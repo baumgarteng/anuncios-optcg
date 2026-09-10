@@ -493,8 +493,9 @@ function renderCards(){
     if(c.completo===false)chips.push('<span class="chip warn">catálogo incompleto</span>');
 
     const p=pctAtual(c);
+    const atualizado=c.liga&&c.liga.atualizado?new Date(c.liga.atualizado).toLocaleDateString('pt-BR'):null;
     const ligaLinha=c.liga
-      ? `Referência MDL ${brl(c.liga.preco)} <span style="opacity:.6">(${esc(c.liga.catalog_id)})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}`
+      ? `Último preço conhecido da Liga: <b>${brl(c.liga.preco)}</b> <span style="opacity:.6">(${esc(c.liga.catalog_id)}${atualizado?' · atualizado em '+atualizado:''})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}`
       : 'Sem preço de referência da Liga para esta carta';
     const accent=(c.colors&&c.colors[0]&&COLORS[c.colors[0]])||'var(--primary)';
 
@@ -513,7 +514,7 @@ function renderCards(){
         <div><label>Variante</label><input class="mono" data-f="variant" data-i="${i}" value="${esc(c.variant)}" placeholder="AA, SA, MA"></div>
         <div><label>Estado</label><select data-f="estado" data-i="${i}">${['Mint','Near Mint','Excelente','Bom'].map(o=>`<option ${c.estado===o?'selected':''}>${o}</option>`).join('')}</select></div>
         <div><label>Preço (R$)</label><input type="number" step="0.01" min="0" data-f="preco" data-i="${i}" value="${c.preco}" placeholder="425,00"></div>
-        <div><label>% abaixo da MDL (deixe vazio para calcular)</label><input type="number" step="1" data-f="pct_manual" data-i="${i}" value="${c.pct_manual}" placeholder="automático"></div>
+        <div><label>% abaixo da MDL${c.liga?' (ajusta o preço sozinho)':' (sem referência da liga)'}</label><input type="number" step="1" data-f="pct_manual" data-i="${i}" value="${c.pct_manual}" placeholder="ex.: 10" ${c.liga?'':'disabled'}></div>
       </div>
       <div class="hint" style="margin-top:9px">${ligaLinha}</div>
     </div>`;}).join('');
@@ -549,6 +550,10 @@ function renderPreview(){
   $('#btn-copy').disabled=!t;$('#btn-save').disabled=!t;
 }
 
+function limpar(){
+  photos=[];cards=[];gen=null;$('#obs').value='';$('#cards-wrap').classList.add('hide');
+  clearErr();renderShots();renderPreview();
+}
 async function salvar(){
   if(!gen)return;
   try{
@@ -556,7 +561,7 @@ async function salvar(){
       body:JSON.stringify({titulo:gen.titulo,curto:gen.curto,completo:gen.completo,
         observacao:$('#obs').value.trim(),cards:cards.filter(c=>c.name||c.code),
         imagens:photos.map(p=>p.full)})});
-    toast('Salvo no banco');carregar();
+    toast('Salvo no banco');carregar();limpar();
   }catch(e){showErr('Não consegui salvar: '+e.message);}
 }
 async function carregar(){
@@ -600,7 +605,15 @@ $('#cards').addEventListener('input',e=>{
   if(i===undefined||!f)return;
   cards[i][f]=el.value;
   if(f==='code'||f==='variant'){clearTimeout(tmr);tmr=setTimeout(()=>lookup(+i),450);}
-  else if(f==='preco'||f==='pct_manual'){renderCards();}
+  else if(f==='preco'){cards[i].pct_manual='';renderCards();}
+  else if(f==='pct_manual'){
+    const c=cards[i],liga=c.liga&&c.liga.preco;
+    if(liga&&el.value!==''){
+      const novo=liga*(1-Number(el.value)/100);
+      if(novo>0)c.preco=novo.toFixed(2);
+    }
+    renderCards();
+  }
 });
 $('#cards').addEventListener('click',e=>{
   const b=e.target.closest('button[data-rm]');if(!b)return;
@@ -613,7 +626,7 @@ $('#seg').onclick=e=>{const b=e.target.closest('button[data-m]');if(!b)return;
 $('#btn-copy').onclick=async()=>{try{await navigator.clipboard.writeText(txtAtual());toast('Texto copiado');}
   catch(e){showErr('O navegador bloqueou a cópia. Selecione o texto na prévia.');}};
 $('#btn-save').onclick=salvar;
-$('#btn-clear').onclick=()=>{photos=[];cards=[];gen=null;$('#obs').value='';$('#cards-wrap').classList.add('hide');clearErr();renderShots();renderPreview();};
+$('#btn-clear').onclick=limpar;
 $('#saved').addEventListener('click',async e=>{
   const c=e.target.closest('button[data-cp]'),d=e.target.closest('button[data-del]');
   if(c){const a=saved.find(x=>String(x.id)===c.dataset.cp);
