@@ -4,179 +4,291 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Anúncios — One Piece TCG</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
 
 :root{
-  --ink:#0E1C28;
-  --ink-2:#16293A;
-  --ink-3:#223B50;
-  --line:#2C4763;
-  --paper:#F7F4EE;
-  --paper-2:#EAE4D8;
-  --muted:#8FA3B5;
-  --brass:#C08A2E;
-  --brass-lit:#E0A93B;
-  --wa-bg:#ECE5DD;
-  --wa-bubble:#DCF8C6;
-  --wa-text:#111B21;
-  --red:#C0392B;
-  --ok:#2E7D5B;
-  --r:10px;
+  --background:#0a0e17;
+  --foreground:#eef1f6;
+  --card:#10151f;
+  --card-2:#141b28;
+  --secondary:#161c28;
+  --secondary-foreground:#c7cedb;
+  --muted:#1a2130;
+  --muted-foreground:#8993a6;
+  --border:#232b3a;
+  --border-strong:#303a4e;
+  --input:#171e2b;
+  --primary:#e3a73d;
+  --primary-lit:#f2c569;
+  --primary-foreground:#1b1206;
+  --destructive:#dc4c3f;
+  --destructive-border:#6e2a22;
+  --success:#34c77b;
+  --success-bg:#12291f;
+  --ring:#e3a73d;
+  --paper:#efe7d6;
+  --ink:#1b1206;
+  --wa-bg:#0b141a;
+  --wa-bubble:#005c4b;
+  --wa-text:#e9edef;
+  --wa-time:#8696a0;
+  --radius:12px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
-  background:var(--ink);
-  color:var(--paper);
+  background:
+    radial-gradient(1100px 480px at 15% -10%, rgba(227,167,61,.10), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(13,59,74,.35), transparent 55%),
+    var(--background);
+  color:var(--foreground);
   font-family:'Archivo',system-ui,sans-serif;
   font-size:15px;
   line-height:1.5;
   -webkit-font-smoothing:antialiased;
 }
 .mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+::selection{background:rgba(227,167,61,.35)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:20px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted-foreground)}
+
+/* ---------- flag ribbon ---------- */
+.ribbon{
+  height:4px;
+  background:repeating-linear-gradient(115deg,
+    var(--destructive) 0 26px, var(--primary) 26px 52px, #16233a 52px 78px);
+  opacity:.85;
+}
 
 /* ---------- chrome ---------- */
 .top{
-  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
-  padding:20px 22px 0;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:22px 22px 0;
 }
+.mark{
+  width:42px;height:42px;border-radius:50%;flex-shrink:0;
+  background:radial-gradient(circle at 32% 28%, var(--primary-lit), var(--primary) 55%, #a97a24 100%);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 0 1px rgba(0,0,0,.25), 0 4px 14px rgba(227,167,61,.28);
+}
+.mark svg{width:24px;height:24px;color:var(--ink)}
+.title-stack{display:flex;flex-direction:column;gap:2px;min-width:0}
 .top h1{
-  font-size:23px;font-weight:800;letter-spacing:-.02em;margin:0;
+  font-family:'Cinzel',serif;font-size:22px;font-weight:900;letter-spacing:.02em;margin:0;
+  background:linear-gradient(180deg,var(--primary-lit),var(--primary) 70%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
 }
-.top .sub{color:var(--muted);font-size:14px}
-.tabs{display:flex;gap:4px;padding:16px 22px 0;border-bottom:1px solid var(--line)}
+.top .sub{color:var(--muted-foreground);font-size:13px}
+.health{
+  margin-left:auto;display:inline-flex;align-items:center;gap:7px;
+  font-size:12.5px;color:var(--muted-foreground);background:var(--card);
+  border:1px solid var(--border);padding:6px 12px;border-radius:999px;
+}
+.health .dot{width:7px;height:7px;border-radius:50%;background:var(--muted-foreground);flex-shrink:0}
+.health.ok .dot{background:var(--success);box-shadow:0 0 0 3px rgba(52,199,123,.18)}
+
+.tabs{display:flex;gap:4px;padding:18px 22px 0;border-bottom:1px solid var(--border)}
 .tab{
-  background:none;border:0;color:var(--muted);font-family:inherit;font-size:15px;
-  font-weight:600;padding:9px 15px;cursor:pointer;border-radius:var(--r) var(--r) 0 0;
-  border-bottom:2px solid transparent;margin-bottom:-1px;
+  display:inline-flex;align-items:center;
+  background:none;border:0;color:var(--muted-foreground);font-family:inherit;font-size:14.5px;
+  font-weight:600;padding:10px 15px;cursor:pointer;border-radius:8px 8px 0 0;
+  border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,background .15s;
 }
-.tab:hover{color:var(--paper)}
-.tab[aria-selected="true"]{color:var(--brass-lit);border-bottom-color:var(--brass-lit)}
+.tab:hover{color:var(--foreground);background:rgba(255,255,255,.03)}
+.tab[aria-selected="true"]{color:var(--primary-lit);border-bottom-color:var(--primary)}
 .tab .cnt{
-  font-size:12px;background:var(--ink-3);color:var(--paper);border-radius:20px;
-  padding:1px 7px;margin-left:6px;font-weight:700
+  font-size:11.5px;background:var(--muted);color:var(--foreground);border-radius:20px;
+  padding:1px 7px;margin-left:7px;font-weight:700
 }
 .wrap{padding:22px;max-width:1240px}
 .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
 
-.panel{background:var(--ink-2);border:1px solid var(--line);border-radius:var(--r);padding:18px}
-.panel h2{font-size:13px;font-weight:700;color:var(--muted);margin:0 0 14px;letter-spacing:.01em}
+.panel{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;
+  box-shadow:0 1px 0 rgba(255,255,255,.02) inset, 0 12px 30px -18px rgba(0,0,0,.6);
+}
+.panel h2{
+  display:flex;align-items:center;gap:8px;
+  font-size:13px;font-weight:700;color:var(--secondary-foreground);margin:0 0 14px;
+  letter-spacing:.03em;text-transform:uppercase;
+}
+.panel h2 svg{width:16px;height:16px;color:var(--primary);flex-shrink:0}
 
 /* ---------- dropzone ---------- */
 .drop{
-  border:2px dashed var(--line);border-radius:var(--r);padding:30px 20px;text-align:center;
+  border:2px dashed var(--border-strong);border-radius:var(--radius);padding:32px 20px;text-align:center;
   cursor:pointer;transition:border-color .15s,background .15s;background:rgba(255,255,255,.015)
 }
-.drop:hover,.drop.over{border-color:var(--brass);background:rgba(192,138,46,.07)}
+.drop:hover,.drop.over{border-color:var(--primary);background:rgba(227,167,61,.06)}
+.drop svg{width:26px;height:26px;color:var(--muted-foreground);margin-bottom:8px}
+.drop:hover svg,.drop.over svg{color:var(--primary)}
 .drop p{margin:0;font-weight:600}
-.drop small{color:var(--muted);display:block;margin-top:5px}
+.drop small{color:var(--muted-foreground);display:block;margin-top:5px}
 .shots{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}
-.shot{position:relative;width:76px;height:106px;border-radius:7px;overflow:hidden;border:1px solid var(--line)}
+.shot{
+  position:relative;width:76px;height:106px;border-radius:8px;overflow:hidden;border:1px solid var(--border);
+  box-shadow:0 6px 14px -8px rgba(0,0,0,.6);transition:transform .15s;
+}
+.shot:hover{transform:translateY(-2px)}
 .shot img{width:100%;height:100%;object-fit:cover;display:block}
 .shot button{
   position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;border:0;
-  background:rgba(14,28,40,.85);color:#fff;cursor:pointer;font-size:13px;line-height:1;padding:0
+  background:rgba(10,14,23,.85);color:#fff;cursor:pointer;font-size:13px;line-height:1;padding:0
 }
+.shot button:hover{background:var(--destructive)}
 
 /* ---------- buttons ---------- */
 button{font-family:inherit}
 .btn{
-  background:var(--brass);color:#1B1206;border:0;border-radius:8px;padding:11px 17px;
-  font-weight:700;font-size:15px;cursor:pointer;transition:background .15s
+  position:relative;overflow:hidden;
+  background:linear-gradient(180deg,var(--primary-lit),var(--primary));color:var(--primary-foreground);
+  border:0;border-radius:9px;padding:11px 17px;
+  font-weight:700;font-size:14.5px;cursor:pointer;transition:filter .15s,transform .1s;
 }
-.btn:hover:not(:disabled){background:var(--brass-lit)}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.btn.ghost{background:transparent;color:var(--paper);border:1px solid var(--line)}
-.btn.ghost:hover:not(:disabled){background:var(--ink-3)}
+.btn:hover:not(:disabled){filter:brightness(1.06)}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn:disabled{opacity:.4;cursor:not-allowed;filter:none}
+.btn:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.btn.ghost{background:transparent;color:var(--foreground);border:1px solid var(--border-strong)}
+.btn.ghost:hover:not(:disabled){background:var(--secondary);filter:none}
 .btn.sm{padding:7px 12px;font-size:13.5px}
-.btn.danger{background:transparent;color:#E8836F;border:1px solid #6B3128}
-.btn.danger:hover{background:#381914}
+.btn.danger{background:transparent;color:#f0a99a;border:1px solid var(--destructive-border)}
+.btn.danger:hover{background:rgba(220,76,63,.12);filter:none}
 .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
 
 /* ---------- card blocks ---------- */
-.cardblk{border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px;background:var(--ink)}
+.cardblk{
+  --accent:var(--primary);
+  border:1px solid var(--border);border-left:3px solid var(--accent);
+  border-radius:var(--radius);padding:14px;margin-bottom:12px;background:var(--card-2);
+  transition:border-color .15s,box-shadow .15s;
+}
+.cardblk:hover{box-shadow:0 10px 26px -18px rgba(0,0,0,.7)}
 .cardhead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:11px}
 .cardname{font-weight:700;font-size:17px;line-height:1.25;margin:0}
-.code{font-size:13px;color:var(--brass-lit);margin-top:2px}
+.code{font-size:13px;color:var(--primary-lit);margin-top:2px}
 .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
-.chip{font-size:11.5px;padding:2px 8px;border-radius:20px;background:var(--ink-3);color:var(--paper);font-weight:600}
+.chip{
+  font-size:11px;padding:3px 9px;border-radius:999px;background:var(--muted);color:var(--foreground);
+  font-weight:700;letter-spacing:.02em;text-transform:uppercase;
+}
 .chip.col{color:#fff}
-.chip.warn{background:#5C3B10;color:#F0C878}
-.chip.ok{background:#17402F;color:#7FD3AC}
+.chip.warn{background:#3f2a0a;color:#fbbf24}
+.chip.ok{background:var(--success-bg);color:#6ee7b7}
 .fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:520px){.fields{grid-template-columns:1fr}}
-label{display:block;font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:4px}
+label{display:block;font-size:12.5px;color:var(--muted-foreground);font-weight:600;margin-bottom:4px}
 input,select,textarea{
-  width:100%;background:var(--ink-2);border:1px solid var(--line);border-radius:7px;
-  color:var(--paper);padding:9px 11px;font-family:inherit;font-size:15px
+  width:100%;background:var(--input);border:1px solid var(--border);border-radius:8px;
+  color:var(--foreground);padding:9px 11px;font-family:inherit;font-size:15px;transition:border-color .15s,box-shadow .15s;
 }
-input:focus,select:focus,textarea:focus{outline:2px solid var(--brass);outline-offset:-1px;border-color:transparent}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ring);box-shadow:0 0 0 3px rgba(227,167,61,.18)}
 textarea{resize:vertical;min-height:62px}
-.hint{font-size:12px;color:var(--muted);margin-top:5px}
+.hint{font-size:12px;color:var(--muted-foreground);margin-top:5px}
 
-/* ---------- whatsapp preview ---------- */
+/* ---------- whatsapp preview (phone frame) ---------- */
+.phone{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.phone-head{
+  display:flex;align-items:center;gap:9px;padding:11px 13px;background:var(--card-2);
+  border-bottom:1px solid var(--border);
+}
+.phone-head .av{
+  width:30px;height:30px;border-radius:50%;flex-shrink:0;
+  background:radial-gradient(circle at 32% 28%,var(--primary-lit),var(--primary) 70%);
+  display:flex;align-items:center;justify-content:center;
+}
+.phone-head .av svg{width:16px;height:16px;color:var(--ink)}
+.phone-head .who{min-width:0}
+.phone-head .who b{display:block;font-size:13.5px;font-weight:700}
+.phone-head .who span{display:block;font-size:11.5px;color:var(--muted-foreground)}
 .wa{
-  background:var(--wa-bg);border-radius:var(--r);padding:18px 14px;min-height:230px;
+  background:var(--wa-bg);
+  background-image:radial-gradient(rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size:14px 14px;
+  padding:18px 14px;min-height:220px;
   display:flex;flex-direction:column;gap:9px
 }
 .bubble{
-  background:var(--wa-bubble);color:var(--wa-text);border-radius:9px;padding:8px 9px 6px;
-  max-width:88%;align-self:flex-end;box-shadow:0 1px 1px rgba(0,0,0,.13);
+  background:var(--wa-bubble);color:var(--wa-text);border-radius:9px 9px 2px 9px;padding:8px 9px 6px;
+  max-width:88%;align-self:flex-end;box-shadow:0 1px 1px rgba(0,0,0,.25);
   font-size:14.5px;line-height:1.42
 }
 .bubble .imgs{display:grid;gap:3px;margin-bottom:7px;border-radius:6px;overflow:hidden}
 .bubble .imgs.n2{grid-template-columns:1fr 1fr}
 .bubble .imgs img{width:100%;display:block;border-radius:4px}
 .bubble .txt{white-space:pre-wrap;word-break:break-word}
-.bubble .time{font-size:11px;color:#667781;text-align:right;margin-top:2px}
+.bubble .time{font-size:11px;color:var(--wa-time);text-align:right;margin-top:2px}
 .wa-empty{
-  color:#7A8A93;text-align:center;margin:auto;font-size:14px;max-width:230px
+  color:var(--muted-foreground);text-align:center;margin:auto;font-size:14px;max-width:230px;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
 }
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.wa-empty svg{width:30px;height:30px;color:var(--border-strong)}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:999px;padding:2px;background:var(--input)}
 .seg button{
-  background:transparent;border:0;color:var(--muted);padding:7px 14px;font-size:13.5px;
-  font-weight:600;cursor:pointer
+  background:transparent;border:0;color:var(--muted-foreground);padding:6px 14px;font-size:13px;
+  font-weight:600;cursor:pointer;border-radius:999px;transition:background .15s,color .15s;
 }
-.seg button[aria-pressed="true"]{background:var(--brass);color:#1B1206}
+.seg button[aria-pressed="true"]{background:var(--primary);color:var(--primary-foreground)}
 
 /* ---------- saved ---------- */
 .saved{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
-.sv{background:var(--ink-2);border:1px solid var(--line);border-radius:var(--r);padding:13px;display:flex;gap:12px}
-.sv img{width:60px;height:84px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--line)}
+.sv{
+  --accent:var(--primary);
+  background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);
+  border-radius:var(--radius);padding:13px;display:flex;gap:12px;transition:box-shadow .15s;
+}
+.sv:hover{box-shadow:0 10px 26px -18px rgba(0,0,0,.7)}
+.sv img{width:60px;height:84px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border)}
 .sv .meta{min-width:0;flex:1}
 .sv .meta h3{margin:0;font-size:15px;font-weight:700;line-height:1.25}
-.sv .price{color:var(--brass-lit);font-weight:700;font-size:14px;margin-top:3px}
-.sv .date{color:var(--muted);font-size:12px;margin-top:2px}
+.sv .price{color:var(--primary-lit);font-weight:700;font-size:14px;margin-top:3px}
+.sv .date{color:var(--muted-foreground);font-size:12px;margin-top:2px}
 .sv .acts{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
 
 /* ---------- misc ---------- */
 .status{
-  display:flex;align-items:center;gap:9px;color:var(--muted);font-size:14px;
+  display:flex;align-items:center;gap:9px;color:var(--muted-foreground);font-size:14px;
   padding:11px 0
 }
-.spin{
-  width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--brass-lit);
-  border-radius:50%;animation:sp .7s linear infinite;flex-shrink:0
-}
+.spin{width:16px;height:16px;color:var(--primary);animation:sp .9s linear infinite;flex-shrink:0}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.spin{animation-duration:2.5s}}
-.err{background:#3A1A15;border:1px solid #6B3128;color:#F0A492;padding:11px 13px;border-radius:8px;font-size:14px;margin-bottom:13px}
-.empty{color:var(--muted);text-align:center;padding:48px 20px}
-.empty p{margin:0 0 6px;font-weight:600;color:var(--paper)}
-details.rules{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
-details.rules summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600}
-details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted);font-size:13px;line-height:1.65}
-.toast{
-  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ok);color:#fff;
-  padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px;z-index:99;box-shadow:0 4px 14px rgba(0,0,0,.35)
+.err{
+  display:flex;gap:9px;align-items:flex-start;
+  background:#25120f;border:1px solid var(--destructive-border);color:#f0a99a;padding:11px 13px;
+  border-radius:9px;font-size:14px;margin-bottom:13px
 }
+.err svg{width:16px;height:16px;flex-shrink:0;margin-top:1px;color:#f0a99a}
+.empty{color:var(--muted-foreground);text-align:center;padding:52px 20px}
+.empty svg{width:34px;height:34px;color:var(--border-strong);margin-bottom:10px}
+.empty p{margin:0 0 6px;font-weight:600;color:var(--foreground)}
+details.rules{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}
+details.rules summary{cursor:pointer;color:var(--muted-foreground);font-size:13px;font-weight:600}
+details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);font-size:13px;line-height:1.65}
+.toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--card);border:1px solid var(--border-strong);color:var(--foreground);
+  padding:10px 18px;border-radius:999px;font-weight:600;font-size:14px;z-index:99;
+  box-shadow:0 10px 30px -8px rgba(0,0,0,.55);animation:up .18s ease-out;
+}
+.toast svg{width:16px;height:16px;color:var(--success)}
+@keyframes up{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
 .hide{display:none !important}
 </style>
+<div class="ribbon"></div>
 <div class="top">
-  <h1>Anúncios</h1>
-  <span class="sub">One Piece TCG — gerador para grupos de WhatsApp</span>
-  <span class="sub mono" id="health" style="margin-left:auto"></span>
+  <div class="mark" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+  </div>
+  <div class="title-stack">
+    <h1>Anúncios</h1>
+    <span class="sub">One Piece TCG — gerador para grupos de WhatsApp</span>
+  </div>
+  <span class="health" id="health-wrap"><span class="dot"></span><span class="mono" id="health"></span></span>
 </div>
 
 <div class="tabs" role="tablist">
@@ -190,8 +302,9 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted);font-size:1
   <div id="view-new" class="grid">
     <div>
       <div class="panel">
-        <h2>Foto da carta</h2>
+        <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3.5"/></svg>Foto da carta</h2>
         <div class="drop" id="drop" tabindex="0" role="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4 7 9M12 4l5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
           <p>Arraste as fotos aqui, cole, ou toque para escolher</p>
           <small>A IA lê o código impresso e o catálogo preenche o resto</small>
         </div>
@@ -201,11 +314,14 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted);font-size:1
           <button class="btn" id="btn-id" disabled>Identificar cartas</button>
           <button class="btn ghost sm" id="btn-manual">Preencher na mão</button>
         </div>
-        <div class="status hide" id="st-id"><span class="spin"></span><span>Lendo a carta e consultando o catálogo…</span></div>
+        <div class="status hide" id="st-id">
+          <svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a10 10 0 1 0 10 10"/></svg>
+          <span>Lendo a carta e consultando o catálogo…</span>
+        </div>
       </div>
 
       <div id="cards-wrap" class="panel hide" style="margin-top:18px">
-        <h2>Cartas do anúncio</h2>
+        <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="14" height="14" rx="2"/><path d="M7 7V4a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-3"/></svg>Cartas do anúncio</h2>
         <div id="cards"></div>
         <button class="btn ghost sm" id="btn-add">Adicionar outra carta</button>
 
@@ -217,7 +333,10 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted);font-size:1
         <div class="row" style="margin-top:16px">
           <button class="btn" id="btn-gen">Gerar anúncio</button>
         </div>
-        <div class="status hide" id="st-gen"><span class="spin"></span><span>Escrevendo o anúncio…</span></div>
+        <div class="status hide" id="st-gen">
+          <svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a10 10 0 1 0 10 10"/></svg>
+          <span>Escrevendo o anúncio…</span>
+        </div>
 
         <details class="rules">
           <summary>Regras fixas aplicadas em todo anúncio</summary>
@@ -234,14 +353,23 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted);font-size:1
     <div>
       <div class="panel">
         <div class="row" style="justify-content:space-between;margin-bottom:14px">
-          <h2 style="margin:0">Como vai aparecer no grupo</h2>
+          <h2 style="margin:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.4 8.5 8.5 0 0 1-4-.9L3 21l1.9-5.5a8.38 8.38 0 0 1-.9-4A8.5 8.5 0 0 1 12.5 3a8.4 8.4 0 0 1 8.5 8.5z"/></svg>Como vai aparecer no grupo</h2>
           <div class="seg" id="seg">
             <button data-m="curto" aria-pressed="true">Curto</button>
             <button data-m="completo" aria-pressed="false">Completo</button>
           </div>
         </div>
-        <div class="wa" id="wa">
-          <div class="wa-empty">O anúncio aparece aqui depois que você identificar a carta e informar o preço.</div>
+        <div class="phone">
+          <div class="phone-head">
+            <span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg></span>
+            <span class="who"><b>Grupo · One Piece TCG</b><span>anúncio em rascunho</span></span>
+          </div>
+          <div class="wa" id="wa">
+            <div class="wa-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M12 3c2.5 2.7 4 6 4 9s-1.5 6.3-4 9c-2.5-2.7-4-6-4-9s1.5-6.3 4-9z"/></svg>
+              O anúncio aparece aqui depois que você identificar a carta e informar o preço.
+            </div>
+          </div>
         </div>
         <div class="row" style="margin-top:14px">
           <button class="btn" id="btn-copy" disabled>Copiar texto</button>
@@ -259,6 +387,7 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted);font-size:1
     </div>
     <div class="saved" id="saved"></div>
     <div class="empty hide" id="saved-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l3-4h12l3 4M3 7v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7M3 7h18M9 11a3 3 0 0 0 6 0"/></svg>
       <p>Nenhum anúncio salvo ainda.</p>
       <span>Os anúncios que você salvar ficam no Postgres, na tabela <span class="mono">anuncio</span>.</span>
     </div>
@@ -272,9 +401,13 @@ const RAR={Leader:'Leader',Common:'C',Uncommon:'UC',Rare:'R',SuperRare:'SR',Secr
 let photos=[], cards=[], gen=null, mode='curto', saved=[];
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
-function showErr(m){const e=$('#err');e.textContent=m;e.classList.remove('hide');e.scrollIntoView({block:'nearest'});}
+const ICO_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+const ICO_OK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const ICO_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+function showErr(m){const e=$('#err');e.innerHTML=ICO_WARN+'<span>'+esc(m)+'</span>';e.classList.remove('hide');e.scrollIntoView({block:'nearest'});}
 function clearErr(){$('#err').classList.add('hide');}
-function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),1900);}
+function toast(m){const t=document.createElement('div');t.className='toast';t.innerHTML=ICO_CHECK+'<span>'+esc(m)+'</span>';document.body.appendChild(t);setTimeout(()=>t.remove(),1900);}
 function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
 function brl(n){if(n===''||n==null||isNaN(n))return '';return 'R$ '+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 
@@ -363,8 +496,9 @@ function renderCards(){
     const ligaLinha=c.liga
       ? `Referência MDL ${brl(c.liga.preco)} <span style="opacity:.6">(${esc(c.liga.catalog_id)})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}`
       : 'Sem preço de referência da Liga para esta carta';
+    const accent=(c.colors&&c.colors[0]&&COLORS[c.colors[0]])||'var(--primary)';
 
-    return `<div class="cardblk">
+    return `<div class="cardblk" style="--accent:${accent}">
       <div class="cardhead">
         <div style="min-width:0">
           <p class="cardname">${esc(c.name)||'Carta sem nome'}</p>
@@ -405,11 +539,12 @@ function txtAtual(){return gen?(mode==='curto'?gen.curto:gen.completo):'';}
 function waFmt(t){return esc(t).replace(/\*([^*\n]+)\*/g,'<b>$1</b>').replace(/_([^_\n]+)_/g,'<i>$1</i>');}
 function renderPreview(){
   const wa=$('#wa'),t=txtAtual();
-  if(!t&&!photos.length){wa.innerHTML='<div class="wa-empty">O anúncio aparece aqui depois que você identificar a carta e informar o preço.</div>';}
+  const emptyMsg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M12 3c2.5 2.7 4 6 4 9s-1.5 6.3-4 9c-2.5-2.7-4-6-4-9s1.5-6.3 4-9z"/></svg>O anúncio aparece aqui depois que você identificar a carta e informar o preço.';
+  if(!t&&!photos.length){wa.innerHTML='<div class="wa-empty">'+emptyMsg+'</div>';}
   else{
     const imgs=photos.length?`<div class="imgs ${photos.length>1?'n2':''}">${photos.map(p=>`<img src="${p.full}" alt="">`).join('')}</div>`:'';
     const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-    wa.innerHTML=`<div class="bubble">${imgs}<div class="txt">${t?waFmt(t):'<i style="color:#667781">sem texto ainda</i>'}</div><div class="time">${now} ✓✓</div></div>`;
+    wa.innerHTML=`<div class="bubble">${imgs}<div class="txt">${t?waFmt(t):'<i style="color:var(--wa-time)">sem texto ainda</i>'}</div><div class="time">${now} ✓✓</div></div>`;
   }
   $('#btn-copy').disabled=!t;$('#btn-save').disabled=!t;
 }
@@ -435,7 +570,8 @@ function renderSaved(){
   $('#saved').innerHTML=saved.map(a=>{
     const cs=(a.cards||[]),nome=cs.map(c=>c.name).filter(Boolean).join(' + ')||a.titulo||'Sem nome';
     const cod=cs.map(c=>(c.code||'')+(c.variant?'-'+c.variant:'')).filter(Boolean).join(', ');
-    return `<div class="sv">${a.capa?`<img src="${a.capa}" alt="">`:''}
+    const accent=(cs[0]&&cs[0].colors&&cs[0].colors[0]&&COLORS[cs[0].colors[0]])||'var(--primary)';
+    return `<div class="sv" style="--accent:${accent}">${a.capa?`<img src="${a.capa}" alt="">`:''}
       <div class="meta"><h3>${esc(nome)}</h3>
       <div class="code mono">${esc(cod)}</div>
       <div class="price">${brl(a.total)}</div>
@@ -497,6 +633,7 @@ function tab(t){
 
 fetch('/healthz').then(r=>r.json()).then(d=>{
   $('#health').textContent=d.ok?(d.catalogo+' cartas'+(d.ia?'':' · IA sem chave')):'banco offline';
+  $('#health-wrap').classList.toggle('ok',!!d.ok);
 }).catch(()=>{$('#health').textContent='';});
 carregar();
 renderPreview();
