@@ -747,7 +747,8 @@ function renderPreview(){
   $('#btn-copy').disabled=!t;$('#btn-save').disabled=!t;
   const totalImgs=photos.length+cards.filter(c=>c.verso).length;
   $('#btn-copy-img').disabled=!totalImgs;
-  $('#btn-copy-img').textContent=totalImgs>1?`Copiar imagens (${totalImgs})`:'Copiar imagens';
+  copyImgIndex=0;
+  $('#btn-copy-img').textContent=totalImgs>1?`Copiar imagens (0/${totalImgs})`:'Copiar imagens';
 }
 
 function limpar(){
@@ -1038,20 +1039,31 @@ $('#btn-copy').onclick=async()=>{try{await navigator.clipboard.writeText(txtAtua
 function todasAsImagens(){
   return [...photos, ...cards.filter(c=>c.verso).map(c=>c.verso)];
 }
+let copyImgIndex=0;
 $('#btn-copy-img').onclick=async()=>{
   const todas=todasAsImagens();
   if(!todas.length)return;
-  try{
-    const blobs=await Promise.all(todas.map(p=>dataURLtoPngBlob(p.full)));
-    await navigator.clipboard.write(blobs.map(b=>new ClipboardItem({'image/png':b})));
-    toast(todas.length>1?`${todas.length} imagens copiadas`:'Imagem copiada');
-  }catch(e){
+  if(todas.length===1){
     try{
       const blob=await dataURLtoPngBlob(todas[0].full);
       await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
-      toast(todas.length>1?`O navegador só aceitou 1 de ${todas.length} imagens — cole essa e repita pra pegar as outras`:'Imagem copiada');
-    }catch(e2){showErr('O navegador bloqueou a cópia de imagem.');}
+      toast('Imagem copiada');
+    }catch(e){showErr('O navegador bloqueou a cópia de imagem.');}
+    return;
   }
+  if(copyImgIndex>=todas.length)copyImgIndex=0;
+  try{
+    const blob=await dataURLtoPngBlob(todas[copyImgIndex].full);
+    await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+    copyImgIndex++;
+    if(copyImgIndex<todas.length){
+      toast(`Imagem ${copyImgIndex} de ${todas.length} copiada — cole no WhatsApp, depois clique de novo aqui pra próxima`);
+    }else{
+      toast(`Imagem ${todas.length} de ${todas.length} copiada — todas coladas! Clicando de novo recomeça do início`);
+      copyImgIndex=0;
+    }
+    $('#btn-copy-img').textContent=`Copiar imagens (${copyImgIndex}/${todas.length})`;
+  }catch(e){showErr('O navegador bloqueou a cópia de imagem.');}
 };
 $('#btn-save').onclick=()=>{if(confirm('Salvar este anúncio no banco?'))salvar();};
 $('#btn-clear').onclick=()=>{if(confirm('Limpar tudo e começar um novo anúncio?'))limpar();};
