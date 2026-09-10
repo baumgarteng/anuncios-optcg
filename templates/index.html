@@ -876,7 +876,9 @@ function abrirDetalhe(i){
   if(c.cost!=null)chips.push(`<span class="chip">Custo ${c.cost}</span>`);
   if(c.power!=null)chips.push(`<span class="chip">${c.power}</span>`);
   const imgs=[];
-  if(c.image_url)imgs.push(`<div><div class="hint" style="margin-bottom:4px">Imagem oficial</div><img src="${c.image_url}" style="width:100%;border-radius:8px;border:1px solid var(--border);display:block"></div>`);
+  if(c.image_url)imgs.push(`<div><div class="hint" style="margin-bottom:4px">Imagem oficial</div>
+      <img src="${c.image_url}" style="width:100%;border-radius:8px;border:1px solid var(--border);display:block"
+        onerror="this.outerHTML='&lt;a class=&quot;btn ghost sm&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot; href=&quot;${c.image_url}&quot;&gt;Abrir imagem oficial em outra aba&lt;/a&gt;'"></div>`);
   if(c.verso)imgs.push(`<div><div class="hint" style="margin-bottom:4px">Verso (sua foto)</div><img src="${c.verso.full}" style="width:100%;border-radius:8px;border:1px solid var(--border);display:block"></div>`);
   $('#detail-body').innerHTML=`
     <div class="chips" style="margin-bottom:10px">${chips.join('')||'<span class="hint">Sem dados de catálogo</span>'}</div>
