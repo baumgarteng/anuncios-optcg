@@ -5,7 +5,7 @@
 <title>Anúncios — One Piece TCG</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,600&family=JetBrains+Mono:wght@500;700&display=swap');
 
 :root{
   --background:#fff6e3;
@@ -41,16 +41,24 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
 body{
+  position:relative;
   background:
     radial-gradient(1200px 480px at 12% -12%, rgba(255,255,255,.85), transparent 60%),
     radial-gradient(1000px 560px at 105% -8%, rgba(126,200,224,.30), transparent 55%),
     var(--background);
   color:var(--foreground);
-  font-family:'Archivo',system-ui,sans-serif;
+  font-family:'Plus Jakarta Sans',system-ui,sans-serif;
   font-size:15px;
-  line-height:1.5;
+  line-height:1.55;
+  letter-spacing:-.005em;
   -webkit-font-smoothing:antialiased;
+}
+/* grão sutil de pergaminho — fixo, não repinta no scroll, só textura */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.5;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.29  0 0 0 0 0.18  0 0 0 0 0.09  0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 .mono{font-family:'JetBrains Mono',ui-monospace,monospace}
 ::selection{background:rgba(227,64,45,.22)}
@@ -58,6 +66,8 @@ body{
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:20px}
 ::-webkit-scrollbar-thumb:hover{background:var(--muted-foreground)}
+@keyframes riseIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){body::before{display:none}}
 
 /* ---------- flag ribbon ---------- */
 .ribbon{
@@ -67,6 +77,7 @@ body{
 }
 
 /* ---------- chrome ---------- */
+.ribbon,.top,.tabs,.wrap{position:relative;z-index:2}
 .top{
   display:flex;align-items:center;gap:14px;flex-wrap:wrap;
   padding:22px 22px 0;
@@ -111,13 +122,14 @@ body{
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
 
 .panel{
-  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;
-  box-shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 10px 24px -20px rgba(120,80,20,.2);
+  background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;
+  box-shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 0 0 1px rgba(120,80,20,.045),
+    0 16px 34px -22px rgba(120,80,20,.32);
 }
 .panel h2{
   display:flex;align-items:center;gap:8px;
-  font-size:13px;font-weight:700;color:var(--secondary-foreground);margin:0 0 14px;
-  letter-spacing:.03em;text-transform:uppercase;
+  font-size:12.5px;font-weight:700;color:var(--secondary-foreground);margin:0 0 14px;
+  letter-spacing:.04em;text-transform:uppercase;
 }
 .panel h2 svg{width:16px;height:16px;color:var(--primary);flex-shrink:0}
 
@@ -153,10 +165,11 @@ button{font-family:inherit}
   position:relative;overflow:hidden;
   background:linear-gradient(180deg,var(--primary-lit),var(--primary));color:var(--primary-foreground);
   border:0;border-radius:9px;padding:11px 17px;
-  font-weight:700;font-size:14.5px;cursor:pointer;transition:filter .15s,transform .1s;
+  font-weight:700;font-size:14.5px;cursor:pointer;
+  transition:filter .15s ease,transform .35s cubic-bezier(.34,1.56,.64,1),box-shadow .25s ease;
 }
-.btn:hover:not(:disabled){filter:brightness(1.06)}
-.btn:active:not(:disabled){transform:translateY(1px)}
+.btn:hover:not(:disabled){filter:brightness(1.06);transform:translateY(-1px)}
+.btn:active:not(:disabled){transform:translateY(0) scale(.98);transition-duration:.1s}
 .btn:disabled{opacity:.4;cursor:not-allowed;filter:none}
 .btn:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
 .btn.ghost{background:transparent;color:var(--foreground);border:1px solid var(--border-strong)}
@@ -171,9 +184,15 @@ button{font-family:inherit}
   --accent:var(--primary);
   border:1px solid var(--border);border-left:3px solid var(--accent);
   border-radius:10px;padding:16px;margin-bottom:12px;background:var(--card-2);
-  transition:border-color .15s,box-shadow .15s,transform .15s;
+  transition:border-color .15s,box-shadow .3s ease,transform .3s cubic-bezier(.34,1.56,.64,1);
+  animation:riseIn .38s cubic-bezier(.16,1,.3,1) both;
 }
-.cardblk:hover{box-shadow:0 12px 28px -18px rgba(120,80,20,.3);transform:translateY(-1px)}
+.cardblk:hover{box-shadow:0 12px 28px -18px rgba(120,80,20,.3);transform:translateY(-2px)}
+.cardblk:nth-child(2){animation-delay:.05s}
+.cardblk:nth-child(3){animation-delay:.1s}
+.cardblk:nth-child(4){animation-delay:.15s}
+.cardblk:nth-child(n+5){animation-delay:.2s}
+@media(prefers-reduced-motion:reduce){.cardblk{animation:none}}
 .cardhead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:11px}
 .cardname{font-weight:700;font-size:17px;line-height:1.25;margin:0;text-wrap:pretty}
 .code{font-size:13px;color:var(--primary);margin-top:2px;font-variant-numeric:tabular-nums}
@@ -249,9 +268,16 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
 .sv{
   --accent:var(--primary);
   background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);
-  border-radius:10px;padding:13px;display:flex;gap:12px;transition:box-shadow .15s,transform .15s;
+  border-radius:10px;padding:13px;display:flex;gap:12px;
+  transition:box-shadow .3s ease,transform .3s cubic-bezier(.34,1.56,.64,1);
+  animation:riseIn .38s cubic-bezier(.16,1,.3,1) both;
 }
-.sv:hover{box-shadow:0 12px 28px -18px rgba(120,80,20,.3);transform:translateY(-1px)}
+.sv:hover{box-shadow:0 12px 28px -18px rgba(120,80,20,.3);transform:translateY(-2px)}
+.sv:nth-child(2){animation-delay:.04s}
+.sv:nth-child(3){animation-delay:.08s}
+.sv:nth-child(4){animation-delay:.12s}
+.sv:nth-child(n+5){animation-delay:.16s}
+@media(prefers-reduced-motion:reduce){.sv{animation:none}}
 .sv img{width:60px;height:84px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border)}
 .sv .meta{min-width:0;flex:1}
 .sv .meta h3{margin:0;font-size:15px;font-weight:700;line-height:1.25;text-wrap:pretty}
@@ -294,11 +320,16 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
 .editor-overlay{
   position:fixed;inset:0;background:rgba(43,27,14,.55);display:flex;align-items:center;
   justify-content:center;z-index:200;padding:20px;
+  animation:overlayIn .2s ease both;
 }
+@keyframes overlayIn{from{opacity:0}to{opacity:1}}
+@keyframes panelIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 .editor-panel{
   background:var(--card);border-radius:16px;max-width:560px;width:100%;max-height:92vh;overflow:auto;
   padding:18px;box-shadow:0 30px 60px -20px rgba(43,27,14,.5);
+  animation:panelIn .3s cubic-bezier(.16,1,.3,1) both;
 }
+@media(prefers-reduced-motion:reduce){.editor-overlay,.editor-panel{animation:none}}
 .editor-panel h3{margin:0 0 12px;font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px}
 .editor-panel h3 svg{width:17px;height:17px;color:var(--primary)}
 .editor-stage{background:#1b1b1b;border-radius:10px;overflow:hidden;max-height:360px;display:flex;align-items:center;justify-content:center}
