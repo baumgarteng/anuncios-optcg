@@ -104,17 +104,33 @@ def buscar_carta(code, variant=""):
         if not linhas:
             return None
 
-        # a linha base é a mais completa; algumas importações vêm vazias
-        carta = next((l for l in linhas if l["rarity"]), linhas[0])
+        # a linha do catálogo tem que ser a da VARIANTE pedida — cada variante
+        # (base/_aa/_ma...) pode ter imagem e raridade diferentes. Casa pelo
+        # id exato primeiro (base+sufixo), depois por variant_type quando o
+        # catálogo classificou a arte; só cai pra "qualquer linha completa"
+        # se a variante pedida não existir no catálogo — e aí NÃO mostra a
+        # imagem de outra variante (ver image_url abaixo), pra não passar
+        # a arte errada como se fosse a da variante que o vendedor está
+        # anunciando.
+        suf = "_" + variant.lower() if variant else ""
+        exata = next((l for l in linhas if l["id"] == base + suf), None)
+        tipo_alvo = {"AA": "alt_art", "SA": "alt_art", "MA": "manga"}.get(variant)
+        por_tipo = next((l for l in linhas if l["variant_type"] == tipo_alvo), None) if tipo_alvo else None
+        carta_variante = exata or por_tipo
+        carta = carta_variante or next((l for l in linhas if l["id"] == base), None) \
+            or next((l for l in linhas if l["rarity"]), linhas[0])
+        imagem_da_variante_certa = bool(carta_variante) or not variant
 
-        # preço de referência: casa pelo sufixo real da Liga. Se a variante
-        # pedida não tem sufixo correspondente com preço, liga fica None —
-        # nunca empresta o preço de outra variante só porque existe alguma.
+        # preço de referência: casa pelo sufixo real da Liga (nunca pelo
+        # número interno _p1/_p2 do catalog_id). Mantém a linha mesmo com
+        # liga_price nulo — sem isso perdíamos liga_page_url (necessário pra
+        # buscar ao vivo e pro histórico) sempre que o snapshot de preço
+        # tivesse zerado mas o histórico de preço ainda existisse.
         cur.execute(
             """SELECT catalog_id, liga_code, liga_price, liga_preco_min, liga_preco_max,
                       liga_suffix, liga_page_url, updated_at
                  FROM liga_catalog_map
-                WHERE base_code = %s AND liga_price IS NOT NULL
+                WHERE base_code = %s AND liga_page_url IS NOT NULL
                 ORDER BY updated_at DESC NULLS LAST""",
             (base,),
         )
@@ -143,10 +159,10 @@ def buscar_carta(code, variant=""):
         "types": limpa(carta["types"]),
         "effect": carta["effect"],
         "trigger": carta["trigger_text"],
-        "image_url": carta["image_url"],
+        "image_url": carta["image_url"] if imagem_da_variante_certa else None,
         "completo": bool(carta["rarity"]),
         "liga": None if not ref else {
-            "preco": float(ref["liga_price"]),
+            "preco": float(ref["liga_price"]) if ref["liga_price"] is not None else None,
             "min": float(ref["liga_preco_min"]) if ref["liga_preco_min"] else None,
             "max": float(ref["liga_preco_max"]) if ref["liga_preco_max"] else None,
             "catalog_id": ref["catalog_id"],

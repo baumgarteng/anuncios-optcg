@@ -467,9 +467,14 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
       <div class="status"><svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a10 10 0 1 0 10 10"/></svg><span>Carregando…</span></div>
     </div>
     <div class="editor-actions">
+      <button class="btn ghost sm" id="hist-copy">Copiar gráfico</button>
       <button class="btn ghost sm" id="hist-close">Fechar</button>
     </div>
   </div>
+</div>
+
+<div class="editor-overlay hide" id="zoom-overlay" style="z-index:300;padding:0;cursor:zoom-out">
+  <img id="zoom-img" style="max-width:96vw;max-height:96vh;object-fit:contain;border-radius:6px" alt="">
 </div>
 
 <div class="editor-overlay hide" id="detail-overlay">
@@ -641,9 +646,15 @@ function hintHTML(i){
   if(!c.liga)return 'Sem preço de referência da Liga para esta carta';
   const p=pctAtual(c);
   const atualizado=c.liga.atualizado?new Date(c.liga.atualizado).toLocaleDateString('pt-BR'):null;
-  const acoes=c.liga.url?` <button class="btn ghost sm" data-refresh="${i}" style="margin-left:4px;padding:2px 9px;font-size:11.5px">Atualizar</button>`
-    +` <button class="btn ghost sm" data-hist="${i}" style="margin-left:4px;padding:2px 9px;font-size:11.5px">Histórico</button>`:'';
-  return `Último preço conhecido da Liga: <b>${brl(c.liga.preco)}</b> <span style="opacity:.6">(${esc(c.liga.codigo||'')}${atualizado?' · atualizado em '+atualizado:''})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}${acoes}`;
+  const btn=(attr,label)=>`<button class="btn ghost sm" ${attr}="${i}" style="margin-left:4px;padding:2px 9px;font-size:11.5px">${label}</button>`;
+  const acoes=c.liga.url
+    ? btn('data-refresh','Atualizar')+btn('data-hist','Histórico')
+      +`<a class="btn ghost sm" href="${c.liga.url}" target="_blank" rel="noopener" style="margin-left:4px;padding:2px 9px;font-size:11.5px;text-decoration:none;display:inline-block">Ver na Liga</a>`
+    : '';
+  const precoTxt=c.liga.preco!=null
+    ?`Último preço conhecido da Liga: <b>${brl(c.liga.preco)}</b>`
+    :'Sem preço em cache pra essa variante ainda';
+  return `${precoTxt} <span style="opacity:.6">(${esc(c.liga.codigo||'')}${atualizado?' · atualizado em '+atualizado:''})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}${acoes}`;
 }
 function updateCardHint(i){
   const el=document.querySelector(`[data-hint="${i}"]`);
@@ -730,8 +741,9 @@ function renderPreview(){
     wa.innerHTML=`<div class="bubble">${imgs}<div class="txt">${t?waFmt(t):'<i style="color:var(--wa-time)">sem texto ainda</i>'}</div><div class="time">${now} ✓✓</div></div>`;
   }
   $('#btn-copy').disabled=!t;$('#btn-save').disabled=!t;
-  $('#btn-copy-img').disabled=!photos.length;
-  $('#btn-copy-img').textContent=photos.length>1?`Copiar imagens (${photos.length})`:'Copiar imagens';
+  const totalImgs=photos.length+cards.filter(c=>c.verso).length;
+  $('#btn-copy-img').disabled=!totalImgs;
+  $('#btn-copy-img').textContent=totalImgs>1?`Copiar imagens (${totalImgs})`:'Copiar imagens';
 }
 
 function limpar(){
@@ -876,10 +888,10 @@ function abrirDetalhe(i){
   if(c.cost!=null)chips.push(`<span class="chip">Custo ${c.cost}</span>`);
   if(c.power!=null)chips.push(`<span class="chip">${c.power}</span>`);
   const imgs=[];
+  if(photos[i])imgs.push(`<div><div class="hint" style="margin-bottom:4px">Sua foto</div><img src="${photos[i].full}" onclick="zoomImg(this.src)" style="width:100%;border-radius:8px;border:1px solid var(--border);display:block;cursor:zoom-in"></div>`);
   if(c.image_url)imgs.push(`<div><div class="hint" style="margin-bottom:4px">Imagem oficial</div>
-      <img src="${c.image_url}" style="width:100%;border-radius:8px;border:1px solid var(--border);display:block"
+      <img src="${c.image_url}" onclick="zoomImg(this.src)" style="width:100%;border-radius:8px;border:1px solid var(--border);display:block;cursor:zoom-in"
         onerror="this.outerHTML='&lt;a class=&quot;btn ghost sm&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot; href=&quot;${c.image_url}&quot;&gt;Abrir imagem oficial em outra aba&lt;/a&gt;'"></div>`);
-  if(c.verso)imgs.push(`<div><div class="hint" style="margin-bottom:4px">Verso (sua foto)</div><img src="${c.verso.full}" style="width:100%;border-radius:8px;border:1px solid var(--border);display:block"></div>`);
   $('#detail-body').innerHTML=`
     <div class="chips" style="margin-bottom:10px">${chips.join('')||'<span class="hint">Sem dados de catálogo</span>'}</div>
     ${imgs.length?`<div style="display:grid;grid-template-columns:${imgs.length>1?'1fr 1fr':'1fr'};gap:10px;margin-bottom:10px">${imgs.join('')}</div>`:'<div class="hint" style="margin-bottom:10px">Sem imagem oficial disponível pra essa carta.</div>'}
@@ -887,6 +899,49 @@ function abrirDetalhe(i){
   $('#detail-overlay').classList.remove('hide');
 }
 $('#detail-close').onclick=()=>$('#detail-overlay').classList.add('hide');
+function zoomImg(src){$('#zoom-img').src=src;$('#zoom-overlay').classList.remove('hide');}
+$('#zoom-overlay').onclick=()=>$('#zoom-overlay').classList.add('hide');
+
+function svgToPngBlob(svgEl,scale){
+  scale=scale||2;
+  return new Promise((resolve,reject)=>{
+    const clone=svgEl.cloneNode(true);
+    const resolveVar=v=>{
+      const m=v&&v.match(/var\((--[\w-]+)\)/);
+      return m?(getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim()||v):v;
+    };
+    [clone,...clone.querySelectorAll('*')].forEach(el=>{
+      ['fill','stroke','stop-color'].forEach(attr=>{
+        const v=el.getAttribute&&el.getAttribute(attr);
+        if(v&&v.includes('var('))el.setAttribute(attr,resolveVar(v));
+      });
+    });
+    const vb=svgEl.viewBox&&svgEl.viewBox.baseVal;
+    const w=(vb&&vb.width)||svgEl.clientWidth||360,h=(vb&&vb.height)||svgEl.clientHeight||160;
+    const bg=getComputedStyle(document.documentElement).getPropertyValue('--card').trim()||'#ffffff';
+    const xml=new XMLSerializer().serializeToString(clone);
+    const svg64='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(xml)));
+    const img=new Image();
+    img.onload=()=>{
+      const c=document.createElement('canvas');c.width=w*scale;c.height=h*scale;
+      const ctx=c.getContext('2d');
+      ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
+      ctx.drawImage(img,0,0,c.width,c.height);
+      c.toBlob(b=>b?resolve(b):reject(new Error('falha ao gerar imagem')),'image/png');
+    };
+    img.onerror=()=>reject(new Error('falha ao renderizar o SVG'));
+    img.src=svg64;
+  });
+}
+$('#hist-copy').onclick=async()=>{
+  const svg=$('#hist-body svg');
+  if(!svg){showErr('Sem gráfico pra copiar ainda.');return;}
+  try{
+    const blob=await svgToPngBlob(svg);
+    await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+    toast('Gráfico copiado');
+  }catch(e){showErr('Não consegui copiar o gráfico: '+e.message);}
+};
 async function lerMais(i){
   const el=document.querySelector(`[data-effect="${i}"]`);
   if(!el)return;
@@ -976,17 +1031,21 @@ $('#seg').onclick=e=>{const b=e.target.closest('button[data-m]');if(!b)return;
   mode=b.dataset.m;$$('#seg button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.m===mode)));renderPreview();};
 $('#btn-copy').onclick=async()=>{try{await navigator.clipboard.writeText(txtAtual());toast('Texto copiado');}
   catch(e){showErr('O navegador bloqueou a cópia. Selecione o texto na prévia.');}};
+function todasAsImagens(){
+  return [...photos, ...cards.filter(c=>c.verso).map(c=>c.verso)];
+}
 $('#btn-copy-img').onclick=async()=>{
-  if(!photos.length)return;
+  const todas=todasAsImagens();
+  if(!todas.length)return;
   try{
-    const blobs=await Promise.all(photos.map(p=>dataURLtoPngBlob(p.full)));
+    const blobs=await Promise.all(todas.map(p=>dataURLtoPngBlob(p.full)));
     await navigator.clipboard.write(blobs.map(b=>new ClipboardItem({'image/png':b})));
-    toast(photos.length>1?`${photos.length} imagens copiadas`:'Imagem copiada');
+    toast(todas.length>1?`${todas.length} imagens copiadas`:'Imagem copiada');
   }catch(e){
     try{
-      const blob=await dataURLtoPngBlob(photos[0].full);
+      const blob=await dataURLtoPngBlob(todas[0].full);
       await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
-      toast(photos.length>1?`O navegador só aceitou 1 de ${photos.length} imagens — cole essa e repita pra pegar as outras`:'Imagem copiada');
+      toast(todas.length>1?`O navegador só aceitou 1 de ${todas.length} imagens — cole essa e repita pra pegar as outras`:'Imagem copiada');
     }catch(e2){showErr('O navegador bloqueou a cópia de imagem.');}
   }
 };
