@@ -385,13 +385,16 @@ def api_gerar():
     for c in cards:
         preco = c.get("preco")
         liga = (c.get("liga") or {}).get("preco")
+        # o desconto anunciado sempre vem do preço FINAL comparado ao preço da
+        # Liga — nunca do sinal bruto do campo de ajuste (esse é só o controle
+        # que o vendedor usa pra chegar no preço; um ajuste positivo pode até
+        # deixar a carta mais cara que a Liga, e aí não tem desconto nenhum
+        # pra anunciar).
         pct = None
         if preco and liga and liga > 0:
             calc = round((1 - float(preco) / float(liga)) * 100)
             if calc > 0:
                 pct = calc
-        if c.get("pct_manual"):
-            pct = int(c["pct_manual"])
         ficha.append({
             "codigo": c.get("code", "") + ("-" + c["variant"] if c.get("variant") else ""),
             "nome": c.get("name"),
