@@ -196,6 +196,8 @@ input,select,textarea{
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ring);box-shadow:0 0 0 3px rgba(227,64,45,.14)}
 textarea{resize:vertical;min-height:62px}
 .hint{font-size:12px;color:var(--muted-foreground);margin-top:5px}
+.mini-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.mini-actions .btn{padding:3px 10px;font-size:11.5px;text-decoration:none;display:inline-block}
 
 /* ---------- whatsapp preview (phone frame) ---------- */
 .phone{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
@@ -646,15 +648,18 @@ function hintHTML(i){
   if(!c.liga)return 'Sem preço de referência da Liga para esta carta';
   const p=pctAtual(c);
   const atualizado=c.liga.atualizado?new Date(c.liga.atualizado).toLocaleDateString('pt-BR'):null;
-  const btn=(attr,label)=>`<button class="btn ghost sm" ${attr}="${i}" style="margin-left:4px;padding:2px 9px;font-size:11.5px">${label}</button>`;
-  const acoes=c.liga.url
-    ? btn('data-refresh','Atualizar')+btn('data-hist','Histórico')
-      +`<a class="btn ghost sm" href="${c.liga.url}" target="_blank" rel="noopener" style="margin-left:4px;padding:2px 9px;font-size:11.5px;text-decoration:none;display:inline-block">Ver na Liga</a>`
-    : '';
   const precoTxt=c.liga.preco!=null
     ?`Último preço conhecido da Liga: <b>${brl(c.liga.preco)}</b>`
     :'Sem preço em cache pra essa variante ainda';
-  return `${precoTxt} <span style="opacity:.6">(${esc(c.liga.codigo||'')}${atualizado?' · atualizado em '+atualizado:''})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}${acoes}`;
+  const linha=`${precoTxt} <span style="opacity:.6">(${esc(c.liga.codigo||'')}${atualizado?' · atualizado em '+atualizado:''})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}`;
+  const acoes=c.liga.url
+    ?`<div class="mini-actions">
+        <button class="btn ghost sm" data-refresh="${i}">Atualizar</button>
+        <button class="btn ghost sm" data-hist="${i}">Histórico</button>
+        <a class="btn ghost sm" href="${c.liga.url}" target="_blank" rel="noopener">Ver na Liga</a>
+      </div>`
+    :'';
+  return linha+acoes;
 }
 function updateCardHint(i){
   const el=document.querySelector(`[data-hint="${i}"]`);
