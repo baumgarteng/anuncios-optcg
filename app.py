@@ -332,7 +332,10 @@ REGRAS = """REGRAS OBRIGATÓRIAS:
 - Linha de envio sempre igual, sem variar: "Envio por conta do comprador, saindo de Joinville/SC."
 - Se quantidade for maior que 1, informe quantas unidades estão disponíveis dessa carta.
 - Se falar de embalagem, use apenas a ideia "em sleeve e bem protegida". NUNCA mencione toploader,
-  caixa, plástico ou qualquer outro detalhe de embalagem."""
+  caixa, plástico ou qualquer outro detalhe de embalagem.
+- SE A LISTA TIVER MAIS DE UMA CARTA, O ANÚNCIO TEM QUE FALAR DE TODAS, NENHUMA DE FORA. Uma chamada
+  de abertura só (pode citar o lote como um todo), depois um bloco por carta — nome+código em negrito
+  e preço de cada uma — e só UMA linha de envio no final, cobrindo o lote inteiro."""
 
 
 @app.post("/api/gerar")
@@ -362,23 +365,32 @@ def api_gerar():
             "pct_abaixo_mdl": pct,
         })
 
+    multiplas = len(ficha) > 1
     prompt = (
         "Você escreve anúncios de venda de cartas do One Piece Card Game para grupos de WhatsApp de "
         "colecionadores brasileiros. O vendedor é um colecionador que joga com o filho e vende do "
-        "próprio acervo.\n\nCARTAS:\n" + json.dumps(ficha, ensure_ascii=False, indent=1) +
+        "próprio acervo.\n\n"
+        + (f"SÃO {len(ficha)} CARTAS NESTE LOTE — TODAS elas têm que aparecer no anúncio, cada uma "
+           "com seu próprio bloco de nome+código em negrito e preço. Não escreva só sobre a primeira.\n\n"
+           if multiplas else "") +
+        "CARTAS:\n" + json.dumps(ficha, ensure_ascii=False, indent=1) +
         "\n\nOBSERVAÇÃO DO VENDEDOR: " + (body.get("observacao") or "nenhuma") +
         "\n\n" + REGRAS +
         '\n\nFORMATO — responda SÓ com este JSON:\n'
-        '{"titulo":"chamada curta e chamativa sobre a carta ou personagem, pode ter 1 emoji",'
-        '"curto":"5 a 7 linhas: chamada, *Nome da carta | CODIGO-VARIANTE* em negrito, preço + frete '
-        '(com -X% MDL se houver), linha de envio — direto mas não seco",'
-        '"completo":"12 a 16 linhas: chamada, título em negrito, 2 a 4 linhas de curiosidade real sobre '
-        'o personagem no universo One Piece, preço e desconto, estado da carta (Mint, Near Mint etc.), '
-        'observação do vendedor se houver, linha de envio — sem dados de jogo (efeito, cor, custo, '
-        'poder, arquétipo)"}'
+        '{"titulo":"chamada curta e chamativa sobre ' + ('o lote' if multiplas else 'a carta ou personagem')
+        + ', pode ter 1 emoji",'
+        '"curto":"chamada + ' + (f'um bloco por carta ({len(ficha)} cartas, todas)' if multiplas
+                                  else '*Nome da carta | CODIGO-VARIANTE* em negrito')
+        + ' com preço + frete (com -X% MDL se houver) + linha de envio no final — direto mas não seco",'
+        '"completo":"chamada, 2 a 4 linhas de curiosidade real sobre ' + ('algum personagem do lote' if multiplas
+                                                                          else 'o personagem') +
+        ' no universo One Piece, depois ' + (f'um bloco por carta ({len(ficha)} cartas, todas)' if multiplas
+                                              else 'o bloco da carta')
+        + ' com nome+código em negrito, preço, desconto e estado, observação do vendedor se houver, '
+        'linha de envio no final — sem dados de jogo (efeito, cor, custo, poder, arquétipo)"}'
     )
     try:
-        d = parse_json(claude([{"role": "user", "content": prompt}], 1600))
+        d = parse_json(claude([{"role": "user", "content": prompt}], 1600 + 400 * len(ficha)))
     except Exception as e:
         return jsonify(erro=f"falha ao gerar: {e}"), 502
     return jsonify(titulo=d.get("titulo", ""), curto=d.get("curto", ""), completo=d.get("completo", ""))

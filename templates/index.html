@@ -458,7 +458,7 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
 </div>
 
 <div class="editor-overlay hide" id="hist-overlay">
-  <div class="editor-panel" style="max-width:420px">
+  <div class="editor-panel" style="max-width:460px">
     <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Histórico de preço</h3>
     <div id="hist-body">
       <div class="status"><svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a10 10 0 1 0 10 10"/></svg><span>Carregando…</span></div>
@@ -856,21 +856,48 @@ async function abrirHistorico(i){
 $('#hist-close').onclick=()=>$('#hist-overlay').classList.add('hide');
 function renderHistChart(hist){
   const pts=hist.filter(h=>h.price!=null);
-  if(!pts.length)return '<div class="hint">Sem histórico registrado ainda para esta carta.</div>';
+  if(!pts.length)return '<div class="hint">Ainda não há histórico registrado pra essa carta — clique em "Atualizar" pra começar a acompanhar o preço dela.</div>';
+  if(pts.length===1){
+    const p=pts[0];
+    return `<div class="hint">Só temos <b>1 leitura</b> até agora: <b>${brl(p.price)}</b> em ${new Date(p.collected_at).toLocaleDateString('pt-BR')}. O gráfico aparece assim que houver mais de uma.</div>`;
+  }
   const prices=pts.map(h=>h.price),min=Math.min(...prices),max=Math.max(...prices);
-  const w=360,h=120,pad=8;
-  const poly=pts.map((pt,idx)=>{
-    const x=pad+(idx/Math.max(pts.length-1,1))*(w-2*pad);
-    const y=max===min?h/2:h-pad-((pt.price-min)/(max-min))*(h-2*pad);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-  const first=pts[0],last=pts[pts.length-1];
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
-      <polyline points="${poly}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  const w=400,h=170,padL=52,padR=12,padT=12,padB=10;
+  const plotW=w-padL-padR,plotH=h-padT-padB;
+  const xAt=idx=>padL+(idx/Math.max(pts.length-1,1))*plotW;
+  const yAt=v=>max===min?padT+plotH/2:padT+plotH-((v-min)/(max-min))*plotH;
+  const line=pts.map((p,idx)=>`${xAt(idx).toFixed(1)},${yAt(p.price).toFixed(1)}`).join(' ');
+  const area=`${padL.toFixed(1)},${(padT+plotH).toFixed(1)} ${line} ${xAt(pts.length-1).toFixed(1)},${(padT+plotH).toFixed(1)}`;
+  const gridLevels=[max,(max+min)/2,min];
+  const grid=gridLevels.map((v,idx)=>{
+    const y=(padT+plotH*idx/2).toFixed(1);
+    return `<line x1="${padL}" y1="${y}" x2="${w-padR}" y2="${y}" stroke="var(--border)" stroke-width="1"/>
+      <text x="${padL-6}" y="${Number(y)+3}" text-anchor="end" font-size="9.5" fill="var(--muted-foreground)">${brl(v).replace('R$ ','')}</text>`;
+  }).join('');
+  const dots=pts.map((p,idx)=>`<circle cx="${xAt(idx).toFixed(1)}" cy="${yAt(p.price).toFixed(1)}" r="${pts.length>25?1.6:2.8}" fill="var(--card)" stroke="var(--primary)" stroke-width="1.6"/>`).join('');
+  const first=pts[0],last=pts[pts.length-1],subiu=last.price>=first.price;
+  return `
+    <div class="row" style="justify-content:space-between;margin-bottom:6px;text-align:center">
+      <div style="flex:1"><div class="hint" style="margin:0">Menor</div><b>${brl(min)}</b></div>
+      <div style="flex:1"><div class="hint" style="margin:0">Atual</div><b style="color:${subiu?'var(--success)':'var(--destructive)'}">${brl(last.price)}</b></div>
+      <div style="flex:1"><div class="hint" style="margin:0">Maior</div><b>${brl(max)}</b></div>
+    </div>
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
+      <defs>
+        <linearGradient id="histFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--primary)" stop-opacity=".3"/>
+          <stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      ${grid}
+      <polygon points="${area}" fill="url(#histFill)"/>
+      <polyline points="${line}" fill="none" stroke="var(--primary)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dots}
     </svg>
-    <div class="row" style="justify-content:space-between;font-size:12px;color:var(--muted-foreground);margin-top:6px">
-      <span>${new Date(first.collected_at).toLocaleDateString('pt-BR')}: ${brl(first.price)}</span>
-      <span>${new Date(last.collected_at).toLocaleDateString('pt-BR')}: <b style="color:var(--foreground)">${brl(last.price)}</b></span>
+    <div class="row" style="justify-content:space-between;font-size:11px;color:var(--muted-foreground);margin-top:2px">
+      <span>${new Date(first.collected_at).toLocaleDateString('pt-BR')}</span>
+      <span>${pts.length} leituras</span>
+      <span>${new Date(last.collected_at).toLocaleDateString('pt-BR')}</span>
     </div>`;
 }
 $('#btn-gen').onclick=generate;
