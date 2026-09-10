@@ -682,9 +682,11 @@ function renderCards(){
   $('#cards').innerHTML=cards.map((c,i)=>{
     const chips=[];
     (c.colors||[]).forEach(x=>{if(COLORS[x])chips.push(`<span class="chip col" style="background:${COLORS[x]}">${x}</span>`);});
-    if(c.rarity)chips.push(`<span class="chip">${RAR[c.rarity]||c.rarity}</span>`);
-    if(c.category)chips.push(`<span class="chip">${c.category}</span>`);
-    if(c.cost!=null)chips.push(`<span class="chip">Custo ${c.cost}</span>`);
+    const rarLabel=c.rarity?(RAR[c.rarity]||c.rarity):null;
+    const isLeader=c.category==='Leader'||c.rarity==='Leader';
+    if(rarLabel)chips.push(`<span class="chip">${rarLabel}</span>`);
+    if(c.category&&c.category!==rarLabel&&c.category!==c.rarity)chips.push(`<span class="chip">${c.category}</span>`);
+    if(c.cost!=null)chips.push(`<span class="chip">${isLeader?'Vida':'Custo'} ${c.cost}</span>`);
     if(c.power!=null)chips.push(`<span class="chip">${c.power}</span>`);
     if(!c.verified&&c.confidence==='baixa')chips.push('<span class="chip warn">confira o código</span>');
     if(c.completo===false)chips.push('<span class="chip warn">catálogo incompleto</span>');
@@ -902,9 +904,11 @@ function abrirDetalhe(i){
   $('#detail-title').textContent=(c.name||'Carta sem nome')+(c.code?' · '+c.code+(c.variant?'-'+c.variant:''):'');
   const chips=[];
   (c.colors||[]).forEach(x=>{if(COLORS[x])chips.push(`<span class="chip col" style="background:${COLORS[x]}">${x}</span>`);});
-  if(c.rarity)chips.push(`<span class="chip">${RAR[c.rarity]||c.rarity}</span>`);
-  if(c.category)chips.push(`<span class="chip">${c.category}</span>`);
-  if(c.cost!=null)chips.push(`<span class="chip">Custo ${c.cost}</span>`);
+  const rarLabel2=c.rarity?(RAR[c.rarity]||c.rarity):null;
+  const isLeader2=c.category==='Leader'||c.rarity==='Leader';
+  if(rarLabel2)chips.push(`<span class="chip">${rarLabel2}</span>`);
+  if(c.category&&c.category!==rarLabel2&&c.category!==c.rarity)chips.push(`<span class="chip">${c.category}</span>`);
+  if(c.cost!=null)chips.push(`<span class="chip">${isLeader2?'Vida':'Custo'} ${c.cost}</span>`);
   if(c.power!=null)chips.push(`<span class="chip">${c.power}</span>`);
   const imgs=[];
   if(photos[i])imgs.push(`<div><div class="hint" style="margin-bottom:4px">Sua foto</div><img src="${photos[i].full}" onclick="zoomImg(this.src)" style="width:100%;border-radius:8px;border:1px solid var(--border);display:block;cursor:zoom-in"></div>`);
