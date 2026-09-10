@@ -371,10 +371,11 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
         <details class="rules">
           <summary>Regras fixas aplicadas em todo anúncio</summary>
           <ul>
-            <li>Título sempre em negrito: nome da carta + código</li>
+            <li>Chamada + título em negrito: nome da carta + código</li>
+            <li>No completo, pode trazer uma curiosidade real sobre o personagem</li>
             <li>Envio por conta do comprador, saindo de Joinville/SC</li>
             <li>Preço sempre no formato R$ 0,00 + frete, com "(-X% MDL)" quando houver referência</li>
-            <li>Nunca cita efeito, cor, custo, poder ou arquétipo da carta</li>
+            <li>Nunca cita dados de jogo: efeito, cor, custo, poder ou arquétipo</li>
             <li>Se falar de embalagem, só "em sleeve e bem protegida"</li>
           </ul>
         </details>
@@ -409,8 +410,9 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
           </div>
         </div>
         <div class="row" style="margin-top:14px">
-          <button class="btn" id="btn-copy" disabled>Copiar texto</button>
-          <button class="btn ghost" id="btn-copy-img" disabled>Copiar imagens</button>
+          <button class="btn" id="btn-copy-all" disabled>Copiar tudo</button>
+          <button class="btn ghost sm" id="btn-copy" disabled>Só texto</button>
+          <button class="btn ghost sm" id="btn-copy-img" disabled>Só imagens</button>
           <button class="btn ghost" id="btn-save" disabled>Salvar no banco</button>
           <button class="btn ghost sm" id="btn-clear">Limpar</button>
         </div>
@@ -434,7 +436,7 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
 
 <div class="editor-overlay hide" id="editor-overlay">
   <div class="editor-panel">
-    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Editar foto</h3>
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>Editar foto — recorte e ajustes</h3>
     <div class="editor-stage"><img id="editor-img" alt=""></div>
     <div class="editor-controls">
       <div class="row">
@@ -443,6 +445,7 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
         <button class="btn ghost sm" id="ed-flip">Espelhar</button>
         <button class="btn ghost sm" id="ed-reset">Resetar</button>
       </div>
+      <label class="editor-slider">Alinhar <input type="range" id="ed-align" min="-45" max="45" step="0.5" value="0"><span id="ed-align-v">0°</span></label>
       <label class="editor-slider">Brilho <input type="range" id="ed-bright" min="50" max="150" value="100"><span id="ed-bright-v">100%</span></label>
       <label class="editor-slider">Contraste <input type="range" id="ed-contrast" min="50" max="150" value="100"><span id="ed-contrast-v">100%</span></label>
       <label class="editor-slider">Saturação <input type="range" id="ed-sat" min="0" max="200" value="100"><span id="ed-sat-v">100%</span></label>
@@ -450,6 +453,18 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
     <div class="editor-actions">
       <button class="btn ghost sm" id="ed-cancel">Cancelar</button>
       <button class="btn" id="ed-apply">Aplicar recorte</button>
+    </div>
+  </div>
+</div>
+
+<div class="editor-overlay hide" id="hist-overlay">
+  <div class="editor-panel" style="max-width:420px">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Histórico de preço</h3>
+    <div id="hist-body">
+      <div class="status"><svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a10 10 0 1 0 10 10"/></svg><span>Carregando…</span></div>
+    </div>
+    <div class="editor-actions">
+      <button class="btn ghost sm" id="hist-close">Fechar</button>
     </div>
   </div>
 </div>
@@ -464,7 +479,8 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
 const ICO_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
 const ICO_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-const ICO_EDIT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
+const ICO_EDIT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>';
+const ICO_CHART='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>';
 
 function showErr(m){const e=$('#err');e.innerHTML=ICO_WARN+'<span>'+esc(m)+'</span>';e.classList.remove('hide');e.scrollIntoView({block:'nearest'});}
 function clearErr(){$('#err').classList.add('hide');}
@@ -513,17 +529,22 @@ function renderShots(){
 }
 
 /* ---------- editor de imagem ---------- */
-let cropper=null, editIndex=-1, flipped=1;
+let cropper=null, editIndex=-1, flipped=1, rot90=0;
 function updateEditorFilter(){
   const b=$('#ed-bright').value,c=$('#ed-contrast').value,s=$('#ed-sat').value;
   $('#ed-bright-v').textContent=b+'%';$('#ed-contrast-v').textContent=c+'%';$('#ed-sat-v').textContent=s+'%';
   const f=`brightness(${b}%) contrast(${c}%) saturate(${s}%)`;
   $$('#editor-overlay img').forEach(im=>im.style.filter=f);
 }
+function applyRotation(){
+  const fine=Number($('#ed-align').value);
+  $('#ed-align-v').textContent=fine.toFixed(1)+'°';
+  if(cropper)cropper.rotateTo(rot90+fine);
+}
 function openEditor(i){
-  editIndex=i;flipped=1;
+  editIndex=i;flipped=1;rot90=0;
   const img=$('#editor-img');
-  $('#ed-bright').value=100;$('#ed-contrast').value=100;$('#ed-sat').value=100;
+  $('#ed-bright').value=100;$('#ed-contrast').value=100;$('#ed-sat').value=100;$('#ed-align').value=0;
   updateEditorFilter();
   $('#editor-overlay').classList.remove('hide');
   const start=()=>{
@@ -540,12 +561,14 @@ function closeEditor(){
   editIndex=-1;
 }
 ['ed-bright','ed-contrast','ed-sat'].forEach(id=>$('#'+id).addEventListener('input',updateEditorFilter));
-$('#ed-rotate-l').onclick=()=>cropper&&cropper.rotate(-90);
-$('#ed-rotate-r').onclick=()=>cropper&&cropper.rotate(90);
+$('#ed-align').addEventListener('input',applyRotation);
+$('#ed-rotate-l').onclick=()=>{rot90=(rot90-90+360)%360;applyRotation();};
+$('#ed-rotate-r').onclick=()=>{rot90=(rot90+90)%360;applyRotation();};
 $('#ed-flip').onclick=()=>{flipped*=-1;cropper&&cropper.scaleX(flipped);};
 $('#ed-reset').onclick=()=>{
   $('#ed-bright').value=100;$('#ed-contrast').value=100;$('#ed-sat').value=100;updateEditorFilter();
-  flipped=1;cropper&&cropper.reset();
+  flipped=1;rot90=0;$('#ed-align').value=0;applyRotation();
+  cropper&&cropper.reset();
 };
 $('#ed-cancel').onclick=closeEditor;
 $('#ed-apply').onclick=()=>{
@@ -563,7 +586,8 @@ $('#ed-apply').onclick=()=>{
   closeEditor();renderShots();toast('Foto editada');
 };
 
-function blank(){return {code:'',variant:'',name:'',rarity:'',category:'',colors:[],cost:null,power:null,types:[],effect:'',liga:null,confidence:'manual',verified:false,preco:'',pct_manual:'',estado:'Mint'};}
+function blank(){return {code:'',variant:'',name:'',rarity:'',category:'',colors:[],cost:null,power:null,types:[],effect:'',liga:null,confidence:'manual',verified:false,preco:'',pct_manual:'',estado:'Mint',quantidade:1};}
+function aplicarPrecoConhecido(c){if(c.liga&&c.liga.preco!=null)c.preco=String(c.liga.preco);return c;}
 
 async function identify(){
   clearErr();$('#st-id').classList.remove('hide');$('#btn-id').disabled=true;
@@ -571,7 +595,7 @@ async function identify(){
     const d=await api('/api/identificar',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({imagens:photos.map(p=>p.full)})});
     if(!d.cards||!d.cards.length){showErr('Nenhuma carta identificada. Tente uma foto mais nítida ou preencha na mão.');return;}
-    cards=d.cards.map(c=>Object.assign(blank(),c));
+    cards=d.cards.map(c=>aplicarPrecoConhecido(Object.assign(blank(),c)));
     renderCards();
   }catch(e){showErr('Falha ao identificar: '+e.message);}
   finally{$('#st-id').classList.add('hide');$('#btn-id').disabled=!photos.length;}
@@ -582,8 +606,9 @@ async function lookup(i){
   if(!c.code||c.code.length<5) return;
   try{
     const d=await api('/api/carta?code='+encodeURIComponent(c.code)+'&variant='+encodeURIComponent(c.variant||''));
-    cards[i]=Object.assign(c,d,{verified:true});
+    cards[i]=aplicarPrecoConhecido(Object.assign(c,d,{verified:true}));
     renderCards();
+    if(d.liga&&d.liga.url)atualizarPreco(i,{silent:true});
   }catch(e){ c.verified=false; }
 }
 
@@ -593,6 +618,20 @@ function pctAtual(c){
   if(!liga||!p) return null;
   const v=Math.round((1-p/liga)*100);
   return v>0?v:null;
+}
+
+function hintHTML(i){
+  const c=cards[i];
+  if(!c.liga)return 'Sem preço de referência da Liga para esta carta';
+  const p=pctAtual(c);
+  const atualizado=c.liga.atualizado?new Date(c.liga.atualizado).toLocaleDateString('pt-BR'):null;
+  const acoes=c.liga.url?` <button class="btn ghost sm" data-refresh="${i}" style="margin-left:4px;padding:2px 9px;font-size:11.5px">Atualizar</button>`
+    +` <button class="btn ghost sm" data-hist="${i}" style="margin-left:4px;padding:2px 9px;font-size:11.5px">${ICO_CHART}Histórico</button>`:'';
+  return `Último preço conhecido da Liga: <b>${brl(c.liga.preco)}</b> <span style="opacity:.6">(${esc(c.liga.codigo||'')}${atualizado?' · atualizado em '+atualizado:''})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}${acoes}`;
+}
+function updateCardHint(i){
+  const el=document.querySelector(`[data-hint="${i}"]`);
+  if(el)el.innerHTML=hintHTML(i);
 }
 
 function renderCards(){
@@ -608,11 +647,6 @@ function renderCards(){
     else if(c.confidence==='baixa')chips.push('<span class="chip warn">confira o código</span>');
     if(c.completo===false)chips.push('<span class="chip warn">catálogo incompleto</span>');
 
-    const p=pctAtual(c);
-    const atualizado=c.liga&&c.liga.atualizado?new Date(c.liga.atualizado).toLocaleDateString('pt-BR'):null;
-    const ligaLinha=c.liga
-      ? `Último preço conhecido da Liga: <b>${brl(c.liga.preco)}</b> <span style="opacity:.6">(${esc(c.liga.catalog_id)}${atualizado?' · atualizado em '+atualizado:''})</span>${p!=null?` — seu preço fica <b>${p}% abaixo</b>`:''}${c.liga.url?` <button class="btn ghost sm" data-refresh="${i}" style="margin-left:4px;padding:2px 9px;font-size:11.5px">Atualizar</button>`:''}`
-      : 'Sem preço de referência da Liga para esta carta';
     const accent=(c.colors&&c.colors[0]&&COLORS[c.colors[0]])||'var(--primary)';
 
     return `<div class="cardblk" style="--accent:${accent}">
@@ -629,10 +663,11 @@ function renderCards(){
         <div><label>Código</label><input class="mono" data-f="code" data-i="${i}" value="${esc(c.code)}" placeholder="OP17-062"></div>
         <div><label>Variante</label><input class="mono" data-f="variant" data-i="${i}" value="${esc(c.variant)}" placeholder="AA, SA, MA"></div>
         <div><label>Estado</label><select data-f="estado" data-i="${i}">${['Mint','Near Mint','Excelente','Bom'].map(o=>`<option ${c.estado===o?'selected':''}>${o}</option>`).join('')}</select></div>
-        <div><label>Preço (R$)</label><input type="number" step="0.01" min="0" data-f="preco" data-i="${i}" value="${c.preco}" placeholder="425,00"></div>
+        <div><label>Quantidade</label><input type="number" min="1" step="1" data-f="quantidade" data-i="${i}" value="${c.quantidade||1}"></div>
+        <div><label>Preço (R$)</label><input inputmode="decimal" data-f="preco" data-i="${i}" value="${c.preco}" placeholder="425,00"></div>
         <div><label>% abaixo da MDL${c.liga?' (ajusta o preço sozinho)':' (sem referência da liga)'}</label><input type="number" step="1" data-f="pct_manual" data-i="${i}" value="${c.pct_manual}" placeholder="ex.: 10" ${c.liga?'':'disabled'}></div>
       </div>
-      <div class="hint" style="margin-top:9px">${ligaLinha}</div>
+      <div class="hint" data-hint="${i}" style="margin-top:9px">${hintHTML(i)}</div>
     </div>`;}).join('');
   renderPreview();
 }
@@ -664,6 +699,7 @@ function renderPreview(){
     wa.innerHTML=`<div class="bubble">${imgs}<div class="txt">${t?waFmt(t):'<i style="color:var(--wa-time)">sem texto ainda</i>'}</div><div class="time">${now} ✓✓</div></div>`;
   }
   $('#btn-copy').disabled=!t;$('#btn-save').disabled=!t;$('#btn-copy-img').disabled=!photos.length;
+  $('#btn-copy-all').disabled=!t&&!photos.length;
 }
 
 function limpar(){
@@ -733,23 +769,42 @@ $('#btn-manual').onclick=()=>{if(!cards.length)cards=[blank()];renderCards();};
 $('#btn-add').onclick=()=>{cards.push(blank());renderCards();};
 let tmr=null;
 $('#cards').addEventListener('input',e=>{
-  const el=e.target,i=el.dataset.i,f=el.dataset.f;
-  if(i===undefined||!f)return;
-  cards[i][f]=el.value;
-  if(f==='code'||f==='variant'){clearTimeout(tmr);tmr=setTimeout(()=>lookup(+i),450);}
-  else if(f==='preco'){cards[i].pct_manual='';renderCards();}
-  else if(f==='pct_manual'){
+  const el=e.target,i=+el.dataset.i,f=el.dataset.f;
+  if(el.dataset.i===undefined||!f)return;
+  if(f==='code'||f==='variant'){
+    cards[i][f]=el.value;
+    clearTimeout(tmr);tmr=setTimeout(()=>lookup(i),450);
+    return;
+  }
+  if(f==='preco'){
+    cards[i].preco=el.value.replace(',','.');
+    cards[i].pct_manual='';
+    const pctInput=document.querySelector(`input[data-f="pct_manual"][data-i="${i}"]`);
+    if(pctInput)pctInput.value='';
+    updateCardHint(i);renderPreview();
+    return;
+  }
+  if(f==='pct_manual'){
+    cards[i][f]=el.value;
     const c=cards[i],liga=c.liga&&c.liga.preco;
     if(liga&&el.value!==''){
       const novo=liga*(1-Number(el.value)/100);
-      if(novo>0)c.preco=novo.toFixed(2);
+      if(novo>0){
+        c.preco=novo.toFixed(2);
+        const precoInput=document.querySelector(`input[data-f="preco"][data-i="${i}"]`);
+        if(precoInput)precoInput.value=c.preco;
+      }
     }
-    renderCards();
+    updateCardHint(i);renderPreview();
+    return;
   }
+  cards[i][f]=el.value;
+  if(f==='quantidade')renderPreview();
 });
 $('#cards').addEventListener('click',e=>{
   const b=e.target.closest('button[data-rm]');
   const rf=e.target.closest('button[data-refresh]');
+  const hs=e.target.closest('button[data-hist]');
   if(b){
     cards.splice(+b.dataset.rm,1);
     if(!cards.length)$('#cards-wrap').classList.add('hide');
@@ -757,8 +812,10 @@ $('#cards').addEventListener('click',e=>{
     return;
   }
   if(rf)atualizarPreco(+rf.dataset.refresh);
+  if(hs)abrirHistorico(+hs.dataset.hist);
 });
-async function atualizarPreco(i){
+async function atualizarPreco(i,opts){
+  opts=opts||{};
   const c=cards[i];
   if(!c.liga||!c.liga.url)return;
   const btn=document.querySelector(`button[data-refresh="${i}"]`);
@@ -766,16 +823,62 @@ async function atualizarPreco(i){
   try{
     const d=await api('/api/atualizar-preco',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({liga_url:c.liga.url,code:c.code,variant:c.variant})});
-    cards[i]=Object.assign(c,d,{verified:true});
+    cards[i]=aplicarPrecoConhecido(Object.assign(c,d,{verified:true}));
     renderCards();
-    toast('Preço atualizado');
-  }catch(e){showErr('Não consegui atualizar: '+e.message);}
+    if(!opts.silent)toast('Preço atualizado');
+  }catch(e){ if(!opts.silent)showErr('Não consegui atualizar: '+e.message); }
+}
+async function abrirHistorico(i){
+  const c=cards[i];
+  if(!c.liga||!c.liga.url)return;
+  $('#hist-overlay').classList.remove('hide');
+  $('#hist-body').innerHTML='<div class="status"><svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a10 10 0 1 0 10 10"/></svg><span>Carregando…</span></div>';
+  try{
+    const d=await api('/api/historico-preco?liga_url='+encodeURIComponent(c.liga.url));
+    $('#hist-body').innerHTML=renderHistChart(d.history||[]);
+  }catch(e){
+    $('#hist-body').innerHTML='<div class="hint">Não consegui carregar o histórico.</div>';
+  }
+}
+$('#hist-close').onclick=()=>$('#hist-overlay').classList.add('hide');
+function renderHistChart(hist){
+  const pts=hist.filter(h=>h.price!=null);
+  if(!pts.length)return '<div class="hint">Sem histórico registrado ainda para esta carta.</div>';
+  const prices=pts.map(h=>h.price),min=Math.min(...prices),max=Math.max(...prices);
+  const w=360,h=120,pad=8;
+  const poly=pts.map((pt,idx)=>{
+    const x=pad+(idx/Math.max(pts.length-1,1))*(w-2*pad);
+    const y=max===min?h/2:h-pad-((pt.price-min)/(max-min))*(h-2*pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const first=pts[0],last=pts[pts.length-1];
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
+      <polyline points="${poly}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+    <div class="row" style="justify-content:space-between;font-size:12px;color:var(--muted-foreground);margin-top:6px">
+      <span>${new Date(first.collected_at).toLocaleDateString('pt-BR')}: ${brl(first.price)}</span>
+      <span>${new Date(last.collected_at).toLocaleDateString('pt-BR')}: <b style="color:var(--foreground)">${brl(last.price)}</b></span>
+    </div>`;
 }
 $('#btn-gen').onclick=generate;
 $('#seg').onclick=e=>{const b=e.target.closest('button[data-m]');if(!b)return;
   mode=b.dataset.m;$$('#seg button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.m===mode)));renderPreview();};
 $('#btn-copy').onclick=async()=>{try{await navigator.clipboard.writeText(txtAtual());toast('Texto copiado');}
   catch(e){showErr('O navegador bloqueou a cópia. Selecione o texto na prévia.');}};
+$('#btn-copy-all').onclick=async()=>{
+  const t=txtAtual();
+  try{
+    const items={};
+    if(t)items['text/plain']=new Blob([t],{type:'text/plain'});
+    if(photos.length)items['image/png']=await dataURLtoPngBlob(photos[0].full);
+    if(!Object.keys(items).length)return;
+    await navigator.clipboard.write([new ClipboardItem(items)]);
+    toast(t&&photos.length?'Texto e imagem copiados — cole a imagem, depois o texto como legenda':t?'Texto copiado':'Imagem copiada');
+  }catch(e){
+    try{await navigator.clipboard.writeText(t);toast('Copiado só o texto (imagem bloqueada)');}
+    catch(e2){showErr('O navegador bloqueou a cópia.');}
+  }
+};
 $('#btn-copy-img').onclick=async()=>{
   if(!photos.length)return;
   try{

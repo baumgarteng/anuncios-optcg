@@ -2,6 +2,7 @@ import os, json, base64, re, datetime
 import psycopg
 from psycopg.rows import dict_row
 import urllib.request
+import urllib.parse
 from flask import Flask, request, jsonify, render_template
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -102,7 +103,7 @@ def buscar_carta(code, variant=""):
 
         # preço de referência: tenta os sufixos na ordem, depois qualquer um do base
         cur.execute(
-            """SELECT catalog_id, liga_price, liga_preco_min, liga_preco_max,
+            """SELECT catalog_id, liga_code, liga_price, liga_preco_min, liga_preco_max,
                       liga_suffix, liga_page_url, updated_at
                  FROM liga_catalog_map
                 WHERE base_code = %s AND liga_price IS NOT NULL""",
@@ -146,6 +147,7 @@ def buscar_carta(code, variant=""):
             "min": float(ref["liga_preco_min"]) if ref["liga_preco_min"] else None,
             "max": float(ref["liga_preco_max"]) if ref["liga_preco_max"] else None,
             "catalog_id": ref["catalog_id"],
+            "codigo": ref["liga_code"],
             "url": ref["liga_page_url"],
             "atualizado": ref["updated_at"].isoformat() if ref["updated_at"] else None,
         },
@@ -229,6 +231,19 @@ def api_atualizar_preco():
     return jsonify(carta)
 
 
+@app.get("/api/historico-preco")
+def api_historico_preco():
+    liga_url = request.args.get("liga_url", "")
+    if not liga_url:
+        return jsonify(erro="liga_url obrigatório"), 400
+    try:
+        qs = urllib.parse.urlencode({"url": liga_url})
+        with urllib.request.urlopen(OPTCG_LIVE_URL.rstrip("/") + "/liga/history?" + qs, timeout=20) as r:
+            return jsonify(json.loads(r.read()))
+    except Exception as e:
+        return jsonify(erro=f"histórico indisponível: {e}"), 502
+
+
 @app.post("/api/identificar")
 def api_identificar():
     imgs = (request.json or {}).get("imagens") or []
@@ -275,18 +290,22 @@ def api_identificar():
 
 
 REGRAS = """REGRAS OBRIGATÓRIAS:
-- Português brasileiro. Direto, sem enrolação, sem tom publicitário.
-- NÃO mencione efeito, cor(es), custo, poder ou arquétipos/tipos da carta — essas informações não
-  entram no anúncio de jeito nenhum, mesmo que você saiba do universo One Piece.
-- A primeira linha é sempre o nome e código da carta em negrito, assim: *Nome da carta | CODIGO-VARIANTE*
+- Português brasileiro. Tom de colecionador pra colecionador: animado e envolvente, nunca publicitário raso.
+- NÃO mencione efeito, cor(es), custo, poder ou arquétipos/tipos da carta — esses DADOS DE JOGO não
+  entram no anúncio de jeito nenhum.
+- Você PODE (e deve, principalmente no completo) usar curiosidades sobre o PERSONAGEM no universo
+  One Piece — quem é, um momento marcante, uma característica marcante dele. Isso é bem-vindo e deixa
+  o anúncio mais gostoso de ler. Não invente nada que não seja conhecido do universo.
+- Sempre comece com uma chamada curta e chamativa sobre a carta ou personagem (pode ter 1 emoji nela,
+  só nela), seguida da linha com nome e código em negrito: *Nome da carta | CODIGO-VARIANTE*
   (negrito do WhatsApp é *asterisco simples* de cada lado — nunca use ** duplo nem outro markdown).
 - Linha de preço logo depois, exatamente como veio na ficha, seguida de "+ frete". Se pct_abaixo_mdl
   vier preenchido, acrescente entre parênteses no formato "(-X% MDL)". Se vier nulo, não escreva nada
   sobre desconto ou referência de preço.
 - Linha de envio sempre igual, sem variar: "Envio por conta do comprador, saindo de Joinville/SC."
+- Se quantidade for maior que 1, informe quantas unidades estão disponíveis dessa carta.
 - Se falar de embalagem, use apenas a ideia "em sleeve e bem protegida". NUNCA mencione toploader,
-  caixa, plástico ou qualquer outro detalhe de embalagem.
-- Nada de emoji, nada de chamada publicitária, nada de fechamento tipo "chama no privado"."""
+  caixa, plástico ou qualquer outro detalhe de embalagem."""
 
 
 @app.post("/api/gerar")
@@ -311,6 +330,7 @@ def api_gerar():
             "codigo": c.get("code", "") + ("-" + c["variant"] if c.get("variant") else ""),
             "nome": c.get("name"),
             "estado": c.get("estado") or "Mint",
+            "quantidade": int(c.get("quantidade") or 1),
             "preco": f"R$ {float(preco):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if preco else None,
             "pct_abaixo_mdl": pct,
         })
@@ -322,10 +342,13 @@ def api_gerar():
         "\n\nOBSERVAÇÃO DO VENDEDOR: " + (body.get("observacao") or "nenhuma") +
         "\n\n" + REGRAS +
         '\n\nFORMATO — responda SÓ com este JSON:\n'
-        '{"titulo":"*Nome da carta | CODIGO-VARIANTE*, em negrito, sem mais nada",'
-        '"curto":"3 a 4 linhas: título em negrito, preço + frete (com -X% MDL se houver), linha de envio",'
-        '"completo":"igual ao curto, pode acrescentar o estado da carta (Mint, Near Mint etc.) e a '
-        'observação do vendedor se houver — sem detalhes de jogo, sem enrolação"}'
+        '{"titulo":"chamada curta e chamativa sobre a carta ou personagem, pode ter 1 emoji",'
+        '"curto":"5 a 7 linhas: chamada, *Nome da carta | CODIGO-VARIANTE* em negrito, preço + frete '
+        '(com -X% MDL se houver), linha de envio — direto mas não seco",'
+        '"completo":"12 a 16 linhas: chamada, título em negrito, 2 a 4 linhas de curiosidade real sobre '
+        'o personagem no universo One Piece, preço e desconto, estado da carta (Mint, Near Mint etc.), '
+        'observação do vendedor se houver, linha de envio — sem dados de jogo (efeito, cor, custo, '
+        'poder, arquétipo)"}'
     )
     try:
         d = parse_json(claude([{"role": "user", "content": prompt}], 1600))
@@ -338,7 +361,7 @@ def api_gerar():
 def api_salvar():
     b = request.json or {}
     cards = b.get("cards") or []
-    total = sum(float(c.get("preco") or 0) for c in cards)
+    total = sum(float(c.get("preco") or 0) * int(c.get("quantidade") or 1) for c in cards)
     try:
         with conn() as c, c.cursor() as cur:
             cur.execute(
