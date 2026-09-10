@@ -670,8 +670,7 @@ function renderCards(){
     if(c.category)chips.push(`<span class="chip">${c.category}</span>`);
     if(c.cost!=null)chips.push(`<span class="chip">Custo ${c.cost}</span>`);
     if(c.power!=null)chips.push(`<span class="chip">${c.power}</span>`);
-    if(c.verified)chips.push('<span class="chip ok">catálogo</span>');
-    else if(c.confidence==='baixa')chips.push('<span class="chip warn">confira o código</span>');
+    if(!c.verified&&c.confidence==='baixa')chips.push('<span class="chip warn">confira o código</span>');
     if(c.completo===false)chips.push('<span class="chip warn">catálogo incompleto</span>');
 
     const accent=(c.colors&&c.colors[0]&&COLORS[c.colors[0]])||'var(--primary)';
