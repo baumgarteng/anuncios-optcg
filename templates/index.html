@@ -363,7 +363,11 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
           <textarea id="obs" placeholder="Ex.: última unidade, aceito troca, envio ainda hoje"></textarea>
         </div>
 
-        <div class="row" style="margin-top:16px">
+        <label style="display:flex;align-items:center;gap:7px;margin-top:16px;font-size:13.5px;color:var(--secondary-foreground);font-weight:600;white-space:normal">
+          <input type="checkbox" id="chk-loja" style="width:auto;margin:0">
+          Incluir o link da minha loja no JornadaGames no anúncio
+        </label>
+        <div class="row" style="margin-top:12px">
           <button class="btn" id="btn-gen">Gerar anúncio</button>
         </div>
         <div class="status hide" id="st-gen">
@@ -463,11 +467,12 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
 </div>
 
 <div class="editor-overlay hide" id="hist-overlay">
-  <div class="editor-panel" style="max-width:460px">
+  <div class="editor-panel" style="max-width:460px;position:relative">
     <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Histórico de preço</h3>
     <div id="hist-body">
       <div class="status"><svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a10 10 0 1 0 10 10"/></svg><span>Carregando…</span></div>
     </div>
+    <div id="hist-tooltip" class="hide" style="position:absolute;pointer-events:none;background:var(--ink);color:#fff;padding:5px 9px;border-radius:6px;font-size:11.5px;line-height:1.4;white-space:nowrap;transform:translate(-50%,-115%);z-index:10;box-shadow:0 4px 10px rgba(0,0,0,.25)"></div>
     <div class="editor-actions">
       <button class="btn ghost sm" id="hist-copy">Copiar gráfico</button>
       <button class="btn ghost sm" id="hist-close">Fechar</button>
@@ -726,7 +731,7 @@ async function generate(){
   $('#st-gen').classList.remove('hide');$('#btn-gen').disabled=true;
   try{
     gen=await api('/api/gerar',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({cards:val,observacao:$('#obs').value.trim()})});
+      body:JSON.stringify({cards:val,observacao:$('#obs').value.trim(),incluir_loja:$('#chk-loja').checked})});
     renderPreview();
     $('#wa').scrollIntoView({behavior:'smooth',block:'nearest'});
   }catch(e){showErr('Falha ao gerar: '+e.message);}
@@ -975,6 +980,7 @@ async function atualizarPreco(i,opts){
 async function abrirHistorico(i){
   const c=cards[i];
   if(!c.liga||!c.liga.url)return;
+  $('#hist-tooltip').classList.add('hide');
   $('#hist-overlay').classList.remove('hide');
   $('#hist-body').innerHTML='<div class="status"><svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a10 10 0 1 0 10 10"/></svg><span>Carregando…</span></div>';
   try{
@@ -985,8 +991,31 @@ async function abrirHistorico(i){
   }
 }
 $('#hist-close').onclick=()=>$('#hist-overlay').classList.add('hide');
+function mostrarPontoHist(circ){
+  const tip=$('#hist-tooltip');
+  const p=histPts[+circ.dataset.idx];
+  if(!p){tip.classList.add('hide');return;}
+  const d=new Date(p.collected_at);
+  tip.innerHTML=`${d.toLocaleDateString('pt-BR')} · ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${brl(p.price)}</b>`;
+  tip.classList.remove('hide');
+  const panel=circ.closest('.editor-panel').getBoundingClientRect();
+  const cr=circ.getBoundingClientRect();
+  tip.style.left=(cr.left+cr.width/2-panel.left)+'px';
+  tip.style.top=(cr.top-panel.top)+'px';
+}
+$('#hist-body').addEventListener('pointermove',e=>{
+  const c=e.target.closest('circle[data-idx]');
+  if(c)mostrarPontoHist(c);else $('#hist-tooltip').classList.add('hide');
+});
+$('#hist-body').addEventListener('pointerdown',e=>{
+  const c=e.target.closest('circle[data-idx]');
+  if(c)mostrarPontoHist(c);
+});
+$('#hist-body').addEventListener('pointerleave',()=>$('#hist-tooltip').classList.add('hide'));
+let histPts=[];
 function renderHistChart(hist){
   const pts=hist.filter(h=>h.price!=null);
+  histPts=pts;
   if(!pts.length)return '<div class="hint">Ainda não há histórico registrado pra essa carta — clique em "Atualizar" pra começar a acompanhar o preço dela.</div>';
   if(pts.length===1){
     const p=pts[0];
@@ -1005,7 +1034,8 @@ function renderHistChart(hist){
     return `<line x1="${padL}" y1="${y}" x2="${w-padR}" y2="${y}" stroke="var(--border)" stroke-width="1"/>
       <text x="${padL-6}" y="${Number(y)+3}" text-anchor="end" font-size="9.5" fill="var(--muted-foreground)">${brl(v).replace('R$ ','')}</text>`;
   }).join('');
-  const dots=pts.map((p,idx)=>`<circle cx="${xAt(idx).toFixed(1)}" cy="${yAt(p.price).toFixed(1)}" r="${pts.length>25?1.6:2.8}" fill="var(--card)" stroke="var(--primary)" stroke-width="1.6"/>`).join('');
+  const dots=pts.map((p,idx)=>`<circle cx="${xAt(idx).toFixed(1)}" cy="${yAt(p.price).toFixed(1)}" r="${pts.length>25?1.6:2.8}" fill="var(--card)" stroke="var(--primary)" stroke-width="1.6" style="pointer-events:none"/>`).join('');
+  const hits=pts.map((p,idx)=>`<circle cx="${xAt(idx).toFixed(1)}" cy="${yAt(p.price).toFixed(1)}" r="11" fill="transparent" data-idx="${idx}" style="cursor:pointer"/>`).join('');
   const first=pts[0],last=pts[pts.length-1],subiu=last.price>=first.price;
   return `
     <div class="row" style="justify-content:space-between;margin-bottom:6px;text-align:center">
@@ -1022,8 +1052,9 @@ function renderHistChart(hist){
       </defs>
       ${grid}
       <polygon points="${area}" fill="url(#histFill)"/>
-      <polyline points="${line}" fill="none" stroke="var(--primary)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+      <polyline points="${line}" fill="none" stroke="var(--primary)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" style="pointer-events:none"/>
       ${dots}
+      ${hits}
     </svg>
     <div class="row" style="justify-content:space-between;font-size:11px;color:var(--muted-foreground);margin-top:2px">
       <span>${new Date(first.collected_at).toLocaleDateString('pt-BR')}</span>
@@ -1090,6 +1121,10 @@ fetch('/healthz').then(r=>r.json()).then(d=>{
 }).catch(()=>{$('#health').textContent='';});
 carregar();
 renderPreview();
+try{$('#chk-loja').checked=localStorage.getItem('incluirLoja')==='1';}catch(e){}
+$('#chk-loja').addEventListener('change',()=>{
+  try{localStorage.setItem('incluirLoja',$('#chk-loja').checked?'1':'0');}catch(e){}
+});
 </script>
 
 </html>

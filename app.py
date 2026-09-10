@@ -241,7 +241,7 @@ def api_atualizar_preco():
     try:
         req = urllib.request.Request(
             OPTCG_LIVE_URL.rstrip("/") + "/liga/refresh",
-            data=json.dumps({"liga_url": liga_url}).encode(),
+            data=json.dumps({"liga_url": liga_url, "source": "anuncios_optcg"}).encode(),
             headers={"content-type": "application/json"},
             method="POST",
         )
@@ -370,12 +370,16 @@ REGRAS = """REGRAS OBRIGATÓRIAS:
   e preço de cada uma — e só UMA linha de envio no final, cobrindo o lote inteiro."""
 
 
+LOJA_URL = "https://www.jornadagames.com/store/baumgartengustavo"
+
+
 @app.post("/api/gerar")
 def api_gerar():
     body = request.json or {}
     cards = body.get("cards") or []
     if not cards:
         return jsonify(erro="nenhuma carta informada"), 400
+    incluir_loja = bool(body.get("incluir_loja"))
 
     ficha = []
     for c in cards:
@@ -408,6 +412,8 @@ def api_gerar():
         "CARTAS:\n" + json.dumps(ficha, ensure_ascii=False, indent=1) +
         "\n\nOBSERVAÇÃO DO VENDEDOR: " + (body.get("observacao") or "nenhuma") +
         "\n\n" + REGRAS +
+        (f"\n- Depois da linha de envio, acrescente uma última linha, sem enfeite: "
+         f"\"Mais cartas na minha loja no JornadaGames: {LOJA_URL}\"." if incluir_loja else "") +
         '\n\nFORMATO — responda SÓ com este JSON:\n'
         '{"titulo":"chamada curta e chamativa sobre ' + ('o lote' if multiplas else 'a carta ou personagem')
         + ', pode ter 1 emoji",'
