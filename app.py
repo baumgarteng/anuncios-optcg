@@ -304,12 +304,16 @@ def api_identificar():
         "DON-003, P-084. Leia da imagem, não adivinhe — se não conseguir ler com confiança, deixe "
         "code vazio e confidence baixa.\n\n"
         "Classifique variant_type pela ARTE da carta, NÃO por uma sigla impressa (a maioria das "
-        "cartas não imprime sufixo de variante nenhum):\n"
+        "cartas não imprime sufixo de variante nenhum). CHEQUE PRIMEIRO se há um número de série "
+        "impresso (tipo 0123/1500, geralmente no canto inferior) — se tiver, é \"serial\" mesmo que "
+        "a arte também pareça dramática/full art (Treasure Rare tem as duas coisas juntas, mas o que "
+        "importa aqui é o número de série). Só depois de descartar isso, avalie o resto:\n"
         '- "base": arte padrão do set, composição normal, moldura colorida, texto de efeito legível\n'
-        '- "alt_art": ilustração alternativa — arte bem diferente da base, geralmente sangria total '
-        "(a arte cobre a carta inteira sem moldura), composição mais dramática\n"
+        '- "serial": tem número de série impresso (ex.: 0123/1500) — confira isso ANTES de "alt_art"\n'
+        '- "alt_art": ilustração alternativa sem número de série — arte bem diferente da base, '
+        "geralmente sangria total (a arte cobre a carta inteira sem moldura), composição mais "
+        "dramática\n"
         '- "manga": arte em preto e branco estilo mangá\n'
-        '- "serial": tem número de série impresso (ex.: 0123/1500)\n'
         "Leia a cor pela mandala/roda de cores no canto inferior esquerdo da carta, não pela "
         "ilustração.\n\n"
         "Responda SÓ com JSON, sem markdown:\n"
@@ -324,7 +328,7 @@ def api_identificar():
     # A variante vem da classificação visual da arte (variant_type), nunca de uma sigla lida —
     # esse mapeamento é fixo e controlado aqui, não um chute da IA (mesmo princípio de não
     # inventar variante usado em buscar_carta).
-    VARIANT_TYPE_TO_VARIANT = {"alt_art": "AA", "manga": "MA", "base": "", "serial": "", "reprint": ""}
+    VARIANT_TYPE_TO_VARIANT = {"alt_art": "AA", "manga": "MA", "serial": "TR", "base": "", "reprint": ""}
 
     saida = []
     for c in data.get("cards", [])[:6]:
