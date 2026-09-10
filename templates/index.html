@@ -500,7 +500,7 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
 const COLORS={Red:'#C0392B',Green:'#2E7D5B',Blue:'#2C6FA8',Purple:'#7A4E9E',Yellow:'#C79A1E',Black:'#33383D'};
 const RAR={Leader:'Leader',Common:'C',Uncommon:'UC',Rare:'R',SuperRare:'SR',SecretRare:'SEC',TreasureRare:'TR',Promo:'P'};
 
-let photos=[], cards=[], gen=null, mode='curto', saved=[];
+let photos=[], cards=[], gen=null, mode='curto', saved=[], editandoId=null;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
 const ICO_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
@@ -758,6 +758,7 @@ function renderPreview(){
     wa.innerHTML=`<div class="bubble">${imgs}<div class="txt">${t?waFmt(t):'<i style="color:var(--wa-time)">sem texto ainda</i>'}</div><div class="time">${now} ✓✓</div></div>`;
   }
   $('#btn-copy').disabled=!t;$('#btn-save').disabled=!t;
+  $('#btn-save').textContent=editandoId?'Atualizar anúncio':'Salvar no banco';
   const totalImgs=photos.length+cards.filter(c=>c.verso).length;
   $('#btn-copy-img').disabled=!totalImgs;
   copyImgIndex=0;
@@ -765,18 +766,38 @@ function renderPreview(){
 }
 
 function limpar(){
-  photos=[];cards=[];gen=null;$('#obs').value='';$('#cards-wrap').classList.add('hide');
+  photos=[];cards=[];gen=null;editandoId=null;$('#obs').value='';$('#cards-wrap').classList.add('hide');
   clearErr();renderShots();renderPreview();
 }
 async function salvar(){
   if(!gen)return;
+  const payload={titulo:gen.titulo,curto:gen.curto,completo:gen.completo,
+    observacao:$('#obs').value.trim(),cards:cards.filter(c=>c.name||c.code),
+    imagens:photos.map(p=>p.full)};
   try{
-    await api('/api/anuncios',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({titulo:gen.titulo,curto:gen.curto,completo:gen.completo,
-        observacao:$('#obs').value.trim(),cards:cards.filter(c=>c.name||c.code),
-        imagens:photos.map(p=>p.full)})});
-    toast('Salvo no banco');carregar();limpar();
+    if(editandoId){
+      await api('/api/anuncios/'+editandoId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      toast('Anúncio atualizado');
+    }else{
+      await api('/api/anuncios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      toast('Salvo no banco');
+    }
+    carregar();limpar();
   }catch(e){showErr('Não consegui salvar: '+e.message);}
+}
+async function carregarParaEditar(id){
+  try{
+    const d=await api('/api/anuncios/'+id);
+    editandoId=id;
+    cards=(d.cards||[]).map(c=>Object.assign(blank(),c));
+    photos=(d.imagens||[]).map(full=>({full,thumb:full}));
+    $('#obs').value=d.observacao||'';
+    gen={titulo:d.titulo,curto:d.texto_curto,completo:d.texto_completo};
+    renderShots();renderCards();renderPreview();
+    tab('new');
+    toast('Anúncio carregado — edite e salve de novo quando quiser');
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(e){showErr('Não consegui carregar o anúncio: '+e.message);}
 }
 async function carregar(){
   try{
@@ -796,6 +817,7 @@ function renderSaved(){
       <div class="price">${brl(a.total)}</div>
       <div class="date">${new Date(a.criado_em).toLocaleDateString('pt-BR')}</div>
       <div class="acts">
+        <button class="btn ghost sm" data-edit-ad="${a.id}">Editar</button>
         <button class="btn ghost sm" data-cp="${a.id}" data-w="curto">Copiar curto</button>
         <button class="btn ghost sm" data-cp="${a.id}" data-w="completo">Completo</button>
         <button class="btn danger sm" data-del="${a.id}">Excluir</button>
@@ -1111,15 +1133,19 @@ $('#btn-copy-img').onclick=async()=>{
     $('#btn-copy-img').textContent=`Copiar imagens (${copyImgIndex}/${todas.length})`;
   }catch(e){showErr('O navegador bloqueou a cópia de imagem.');}
 };
-$('#btn-save').onclick=()=>{if(confirm('Salvar este anúncio no banco?'))salvar();};
+$('#btn-save').onclick=()=>{if(confirm(editandoId?'Atualizar este anúncio salvo?':'Salvar este anúncio no banco?'))salvar();};
 $('#btn-clear').onclick=()=>{if(confirm('Limpar tudo e começar um novo anúncio?'))limpar();};
 $('#saved').addEventListener('click',async e=>{
   const c=e.target.closest('button[data-cp]'),d=e.target.closest('button[data-del]');
+  const ed=e.target.closest('button[data-edit-ad]');
   if(c){const a=saved.find(x=>String(x.id)===c.dataset.cp);
     try{await navigator.clipboard.writeText(c.dataset.w==='curto'?a.texto_curto:a.texto_completo);toast('Texto copiado');}
     catch(err){showErr('Cópia bloqueada pelo navegador.');}}
-  if(d){try{await api('/api/anuncios/'+d.dataset.del,{method:'DELETE'});toast('Excluído');carregar();}
-    catch(err){showErr('Não consegui excluir: '+err.message);}}});
+  if(d){if(confirm('Excluir este anúncio salvo? Não dá pra desfazer.')){
+    try{await api('/api/anuncios/'+d.dataset.del,{method:'DELETE'});toast('Excluído');carregar();}
+    catch(err){showErr('Não consegui excluir: '+err.message);}}}
+  if(ed)carregarParaEditar(+ed.dataset.editAd);
+});
 $('#q').oninput=()=>{clearTimeout(tmr);tmr=setTimeout(carregar,350);};
 $('#btn-reload').onclick=carregar;
 $('#tab-new').onclick=()=>tab('new');

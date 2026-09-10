@@ -478,6 +478,50 @@ def api_salvar():
         return jsonify(erro=str(e)), 500
 
 
+@app.get("/api/anuncios/<int:aid>")
+def api_anuncio_detalhe(aid):
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute(
+                """SELECT id, criado_em, titulo, texto_curto, texto_completo, observacao, total, cards
+                     FROM anuncio WHERE id = %s""", (aid,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify(erro="anúncio não encontrado"), 404
+            cur.execute(
+                "SELECT dados FROM anuncio_imagem WHERE anuncio_id = %s ORDER BY ordem", (aid,))
+            imagens = [r["dados"] for r in cur.fetchall()]
+        row["criado_em"] = row["criado_em"].isoformat()
+        row["total"] = float(row["total"] or 0)
+        row["imagens"] = imagens
+        return jsonify(row)
+    except Exception as e:
+        return jsonify(erro=str(e)), 500
+
+
+@app.put("/api/anuncios/<int:aid>")
+def api_anuncio_atualizar(aid):
+    b = request.json or {}
+    cards = b.get("cards") or []
+    total = sum(float(c.get("preco") or 0) * int(c.get("quantidade") or 1) for c in cards)
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute(
+                """UPDATE anuncio SET titulo=%s, texto_curto=%s, texto_completo=%s, observacao=%s,
+                          total=%s, cards=%s WHERE id=%s""",
+                (b.get("titulo"), b.get("curto"), b.get("completo"), b.get("observacao"),
+                 total, json.dumps(cards, ensure_ascii=False), aid))
+            cur.execute("DELETE FROM anuncio_imagem WHERE anuncio_id = %s", (aid,))
+            for i, img in enumerate((b.get("imagens") or [])[:4]):
+                cur.execute(
+                    "INSERT INTO anuncio_imagem (anuncio_id, ordem, dados) VALUES (%s,%s,%s)",
+                    (aid, i, img))
+            c.commit()
+        return jsonify(id=aid)
+    except Exception as e:
+        return jsonify(erro=str(e)), 500
+
+
 @app.get("/api/anuncios")
 def api_listar():
     q = (request.args.get("q") or "").strip()
