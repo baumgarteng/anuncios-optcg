@@ -517,7 +517,8 @@ let cropper=null, editIndex=-1, flipped=1;
 function updateEditorFilter(){
   const b=$('#ed-bright').value,c=$('#ed-contrast').value,s=$('#ed-sat').value;
   $('#ed-bright-v').textContent=b+'%';$('#ed-contrast-v').textContent=c+'%';$('#ed-sat-v').textContent=s+'%';
-  $('#editor-img').style.filter=`brightness(${b}%) contrast(${c}%) saturate(${s}%)`;
+  const f=`brightness(${b}%) contrast(${c}%) saturate(${s}%)`;
+  $$('#editor-overlay img').forEach(im=>im.style.filter=f);
 }
 function openEditor(i){
   editIndex=i;flipped=1;
