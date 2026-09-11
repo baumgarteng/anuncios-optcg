@@ -396,6 +396,12 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
           <textarea id="obs" placeholder="Ex.: última unidade, aceito troca, envio ainda hoje"></textarea>
         </div>
 
+        <div style="margin-top:16px">
+          <label>Frases prontas (marque as que quiser incluir)</label>
+          <div id="frases-padrao" style="display:flex;flex-direction:column;gap:8px;margin-top:4px"></div>
+          <div class="hint">Ficam marcadas pro próximo anúncio também.</div>
+        </div>
+
         <label style="display:flex;align-items:center;gap:7px;margin-top:16px;font-size:13.5px;color:var(--secondary-foreground);font-weight:700;white-space:normal">
           <input type="checkbox" id="chk-loja" style="width:auto;margin:0">
           Incluir o link da minha loja no JornadaGames no anúncio
@@ -532,6 +538,14 @@ details.rules ul{margin:9px 0 0;padding-left:19px;color:var(--muted-foreground);
 <script>
 const COLORS={Red:'#C0392B',Green:'#2E7D5B',Blue:'#2C6FA8',Purple:'#7A4E9E',Yellow:'#C79A1E',Black:'#33383D'};
 const RAR={Leader:'Leader',Common:'C',Uncommon:'UC',Rare:'R',SuperRare:'SR',SecretRare:'SEC',TreasureRare:'TR',Promo:'P'};
+
+const FRASES_PADRAO=[
+  'Carta rara, poucas unidades no mercado.',
+  'Saiu do Booster direto pro Sleeve e Binder.',
+  'Somente venda, sem trocas.',
+  'Envio pelo SuperFrete com opção a sua escolha.',
+  'Aceito pagamento com cartão de crédito, consulte taxas.'
+];
 
 let photos=[], cards=[], gen=null, mode='curto', saved=[], editandoId=null;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -767,6 +781,24 @@ function renderCards(){
   renderPreview();
 }
 
+function renderFrasesPadrao(){
+  let marcadas=[];
+  try{marcadas=JSON.parse(localStorage.getItem('frasesPadrao')||'[]');}catch(e){}
+  $('#frases-padrao').innerHTML=FRASES_PADRAO.map((f,i)=>`
+    <label style="display:flex;align-items:flex-start;gap:7px;font-size:13.5px;font-weight:500;color:var(--foreground);white-space:normal">
+      <input type="checkbox" data-frase="${i}" style="width:auto;margin:2px 0 0" ${marcadas.includes(i)?'checked':''}>
+      <span>${esc(f)}</span>
+    </label>`).join('');
+}
+function frasesMarcadas(){
+  return $$('#frases-padrao input[type=checkbox]').filter(c=>c.checked).map(c=>FRASES_PADRAO[+c.dataset.frase]);
+}
+$('#frases-padrao').addEventListener('change',()=>{
+  const idx=$$('#frases-padrao input[type=checkbox]').filter(c=>c.checked).map(c=>+c.dataset.frase);
+  try{localStorage.setItem('frasesPadrao',JSON.stringify(idx));}catch(e){}
+});
+renderFrasesPadrao();
+
 async function generate(){
   clearErr();
   const val=cards.filter(c=>c.name||c.code);
@@ -775,7 +807,7 @@ async function generate(){
   $('#st-gen').classList.remove('hide');$('#btn-gen').disabled=true;
   try{
     gen=await api('/api/gerar',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({cards:val,observacao:$('#obs').value.trim(),incluir_loja:$('#chk-loja').checked})});
+      body:JSON.stringify({cards:val,observacao:$('#obs').value.trim(),incluir_loja:$('#chk-loja').checked,frases:frasesMarcadas()})});
     renderPreview();
     $('#wa').scrollIntoView({behavior:'smooth',block:'nearest'});
   }catch(e){showErr('Falha ao gerar: '+e.message);}
