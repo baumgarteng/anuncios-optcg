@@ -144,7 +144,7 @@ def buscar_carta(code, variant=""):
         # histórico de preço ainda existisse.
         cur.execute(
             """SELECT catalog_id, liga_code, liga_price, liga_preco_min, liga_preco_max,
-                      liga_suffix, liga_page_url, updated_at
+                      liga_suffix, liga_page_url, liga_image_url, updated_at
                  FROM liga_catalog_map
                 WHERE base_code = %s AND liga_page_url IS NOT NULL
                 ORDER BY updated_at DESC NULLS LAST""",
@@ -192,6 +192,15 @@ def buscar_carta(code, variant=""):
         or next((l for l in linhas if l["rarity"]), linhas[0])
     imagem_da_variante_certa = bool(carta_variante) or not variant
 
+    # A imagem oficial do catalog (site da Bandai) costuma bloquear hotlink e
+    # dar erro no navegador. A Liga BR guarda sua própria cópia da imagem por
+    # anúncio (liga_image_url) — já hospedada de um jeito que carrega sem
+    # bloqueio. Quando a variante bateu com um anúncio real da Liga, prefere
+    # essa imagem (é a MESMA carta, só um espelho mais confiável), e só cai
+    # pra imagem do catalog quando a Liga não tem nada pra essa variante.
+    imagem = (ref["liga_image_url"] if ref and ref.get("liga_image_url") else None) \
+        or (carta["image_url"] if imagem_da_variante_certa else None)
+
     def limpa(v):
         if not v:
             return []
@@ -213,7 +222,7 @@ def buscar_carta(code, variant=""):
         "types": limpa(carta["types"]),
         "effect": carta["effect"],
         "trigger": carta["trigger_text"],
-        "image_url": carta["image_url"] if imagem_da_variante_certa else None,
+        "image_url": imagem,
         "completo": bool(carta["rarity"]),
         "liga": None if not ref else {
             "preco": float(ref["liga_price"]) if ref["liga_price"] is not None else None,
