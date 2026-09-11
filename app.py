@@ -58,23 +58,55 @@ def init_db():
 # ---------------------------------------------------------------- catálogo
 BASE_RE = re.compile(r"^([A-Z0-9]+-\d+)", re.I)
 
-# sufixo REAL da Liga BR (liga_suffix) que corresponde a cada variante que o
-# usuário pode digitar. Fonte: a mesma tabela usada pelo scanner do
-# optcg-cloud (_LIGA_SUFFIX_VARIANT/_LIGA_SUFFIX_MEANING) — AA=Alt Art,
-# SP=Special/parallel, MA=Manga, TF=Textured Foil. Nunca casamos pelo número
-# interno _p1/_p2 do catalog_id: esse número é só ordem de importação, não
-# diz qual variante é (_p1 pode ser "-CC" Premium Card Collection, _p2 pode
-# ser "-AA", varia carta a carta — usar isso como se fosse a variante pedida
-# foi o bug que misturava preço de uma variante errada).
-VARIANTES = {
-    "":   [None],
-    "AA": ["AA"],
-    "SA": ["AA"],
-    "SP": ["SP"],
-    "MA": ["MA"],
-    "TR": ["TR"],
-    "SF": ["TF", "SF"],
+# Classificação de cada sufixo REAL da Liga BR — copiada verbatim de
+# optcg-cloud/app.py (_LIGA_SUFFIX_VARIANT / _LIGA_PROMO_SUFFIXES), a mesma
+# tabela que o scanner usa. A Liga tem 150+ sufixos diferentes (AA, PA, GS,
+# TF, EA, 3A, SEC, RE, SN, PF, FA, SP, P, WP, JR, além de dezenas de siglas
+# de torneio/evento) — nunca dá pra cobrir isso com uma lista fixa pequena,
+# então usamos a classificação por "balde" (alt_art/manga/parallel/serial/
+# reprint/promo) em vez de casar sufixo por sufixo.
+_LIGA_SUFFIX_VARIANT = {
+    "AA": "alt_art", "MA": "manga", "GS": "alt_art", "TF": "alt_art", "EA": "alt_art",
+    "3A": "alt_art", "SEC": "alt_art", "RE": "reprint", "SN": "serial",
+    "PA": "parallel", "PF": "parallel", "FA": "parallel", "SP": "parallel", "P": "parallel",
+    "WP": "promo", "JR": "promo",
 }
+_LIGA_PROMO_SUFFIXES = {
+    "CS", "OC", "OF", "OP", "RC", "RF", "RP", "TC", "BS", "CP", "SW",
+    "CW", "CC", "GC", "SH", "FR", "PR", "PW", "AE", "AT", "CB", "UD",
+    "UW", "OB", "RT", "NW", "NY", "TP", "TP4", "TTC", "SC", "BC", "EP",
+    "CF", "CF2", "CT", "CT2", "SB", "SG", "CH", "EW", "IB", "EF", "CE",
+    "QU", "QW", "SR", "OW", "RW", "RS", "GF", "F1", "F2", "F3",
+    "FB", "MP", "VJ", "JW", "IK", "PP", "BW", "BP", "AS", "JU", "LE",
+    "LT", "IA", "CG", "TS", "EG", "SL", "NE", "SJ", "DO", "R1", "1A",
+    "2A", "3W", "LA", "DD", "DF", "JP", "RB", "SD", "BG",
+    "WF", "GO", "C1", "C2", "C3", "SA", "EH", "CO", "W2", "PC", "PS",
+    "TA", "TW", "ST", "TB", "BO", "I2", "WT", "AP",
+}
+
+# variante que o usuário digita/o identificador de IA devolve (mesmo conceito
+# de VARIANT_TYPE_TO_VARIANT lá embaixo) → balde de sufixo da Liga que
+# procura.
+_VARIANTE_BUCKET = {
+    "": "base", "AA": "alt_art", "SA": "alt_art", "MA": "manga",
+    "TR": "serial", "SP": "parallel", "SF": "parallel",
+}
+
+
+def _liga_suffix_bucket(suffix):
+    """Classifica um liga_suffix real num balde (base/alt_art/manga/parallel/
+    serial/reprint/promo/outro), igual ao scanner do optcg-cloud."""
+    if not suffix:
+        return "base"
+    s = suffix.upper().lstrip("-")
+    vt = _LIGA_SUFFIX_VARIANT.get(s)
+    if vt:
+        return vt
+    if s in _LIGA_PROMO_SUFFIXES:
+        return "promo"
+    if re.match(r"^\d+$", s):
+        return "serial"
+    return "outro"
 
 
 def base_code(code):
@@ -88,7 +120,7 @@ def buscar_carta(code, variant=""):
     if not base:
         return None
     variant = (variant or "").strip().upper()
-    alvo = VARIANTES.get(variant, [variant or None])
+    alvo_bucket = _VARIANTE_BUCKET.get(variant, "outro")
 
     with conn() as c, c.cursor() as cur:
         cur.execute(
@@ -104,28 +136,12 @@ def buscar_carta(code, variant=""):
         if not linhas:
             return None
 
-        # a linha do catálogo tem que ser a da VARIANTE pedida — cada variante
-        # (base/_aa/_ma...) pode ter imagem e raridade diferentes. Casa pelo
-        # id exato primeiro (base+sufixo), depois por variant_type quando o
-        # catálogo classificou a arte; só cai pra "qualquer linha completa"
-        # se a variante pedida não existir no catálogo — e aí NÃO mostra a
-        # imagem de outra variante (ver image_url abaixo), pra não passar
-        # a arte errada como se fosse a da variante que o vendedor está
-        # anunciando.
-        suf = "_" + variant.lower() if variant else ""
-        exata = next((l for l in linhas if l["id"] == base + suf), None)
-        tipo_alvo = {"AA": "alt_art", "SA": "alt_art", "MA": "manga"}.get(variant)
-        por_tipo = next((l for l in linhas if l["variant_type"] == tipo_alvo), None) if tipo_alvo else None
-        carta_variante = exata or por_tipo
-        carta = carta_variante or next((l for l in linhas if l["id"] == base), None) \
-            or next((l for l in linhas if l["rarity"]), linhas[0])
-        imagem_da_variante_certa = bool(carta_variante) or not variant
-
-        # preço de referência: casa pelo sufixo real da Liga (nunca pelo
-        # número interno _p1/_p2 do catalog_id). Mantém a linha mesmo com
-        # liga_price nulo — sem isso perdíamos liga_page_url (necessário pra
-        # buscar ao vivo e pro histórico) sempre que o snapshot de preço
-        # tivesse zerado mas o histórico de preço ainda existisse.
+        # preço de referência: casa pelo BALDE do sufixo real da Liga (nunca
+        # pelo número interno _p1/_p2 do catalog_id, que é só ordem de
+        # importação). Mantém a linha mesmo com liga_price nulo — sem isso
+        # perdíamos liga_page_url (necessário pra buscar ao vivo e pro
+        # histórico) sempre que o snapshot de preço tivesse zerado mas o
+        # histórico de preço ainda existisse.
         cur.execute(
             """SELECT catalog_id, liga_code, liga_price, liga_preco_min, liga_preco_max,
                       liga_suffix, liga_page_url, updated_at
@@ -136,7 +152,45 @@ def buscar_carta(code, variant=""):
         )
         candidatos = cur.fetchall()
 
-    ref = next((p for p in candidatos if (p["liga_suffix"] or None) in alvo), None)
+    diretos = [p for p in candidatos if _liga_suffix_bucket(p["liga_suffix"]) == alvo_bucket]
+    if not diretos and alvo_bucket in ("alt_art", "parallel"):
+        # A Liga BR não usa uma sigla única e consistente pro "print especial"
+        # de cada carta (uma carta chama de AA, outra chama a mesma ideia de
+        # PA/GS/FA...). Quando só existe UM candidato que não é o print base
+        # nem uma sigla de torneio/promo, esse candidato só pode ser o print
+        # especial da carta — mesma regra de fallback que o optcg-cloud usa
+        # ("única parallel") quando o sufixo não bate com a tabela conhecida.
+        nao_base_promo = [p for p in candidatos
+                          if _liga_suffix_bucket(p["liga_suffix"]) not in ("base", "promo")]
+        if len(nao_base_promo) == 1:
+            diretos = nao_base_promo
+    elif not diretos and alvo_bucket == "base":
+        diretos = [p for p in candidatos if not p["liga_suffix"]]
+    if not diretos and variant and variant not in _VARIANTE_BUCKET:
+        # variante digitada não é uma das categorias conhecidas (AA/MA/TR/...)
+        # — trata como o sufixo literal da Liga mesmo (ex.: usuário digitou
+        # "PA" ou "GS" direto), sem inventar bucket pra ela.
+        diretos = [p for p in candidatos if (p["liga_suffix"] or "").upper() == variant]
+
+    ref = diretos[0] if diretos else None
+
+    # a linha do catálogo tem que ser a da VARIANTE pedida — cada variante
+    # (base/_p1/_p2...) pode ter imagem e raridade diferentes. Prioridade:
+    # 1) o catalog_id que a própria Liga já associou a essa variante (link
+    #    real do banco, não um palpite); 2) id exato base+sufixo digitado;
+    # 3) variant_type quando o catálogo classificou a arte. Só cai pra
+    # "qualquer linha completa" se nada bateu — e aí NÃO mostra a imagem de
+    # outra variante (ver image_url abaixo), pra não passar a arte errada
+    # como se fosse a da variante que o vendedor está anunciando.
+    por_liga = next((l for l in linhas if ref and l["id"] == ref["catalog_id"]), None) if ref else None
+    suf = "_" + variant.lower() if variant else ""
+    exata = next((l for l in linhas if l["id"] == base + suf), None)
+    tipo_alvo = {"AA": "alt_art", "SA": "alt_art", "MA": "manga"}.get(variant)
+    por_tipo = next((l for l in linhas if l["variant_type"] == tipo_alvo), None) if tipo_alvo else None
+    carta_variante = por_liga or exata or por_tipo
+    carta = carta_variante or next((l for l in linhas if l["id"] == base), None) \
+        or next((l for l in linhas if l["rarity"]), linhas[0])
+    imagem_da_variante_certa = bool(carta_variante) or not variant
 
     def limpa(v):
         if not v:
