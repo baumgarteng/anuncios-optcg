@@ -426,16 +426,30 @@ REGRAS = """REGRAS OBRIGATÓRIAS:
   ponto pros milhares — nunca escreva ponto como separador de centavos (R$ 279,18 está certo,
   R$ 279.18 está errado). Se pct_abaixo_mdl vier preenchido, acrescente entre parênteses no formato
   "(-X% MDL)". Se vier nulo, não escreva nada sobre desconto ou referência de preço.
-- Linha de envio sempre igual, sem variar: "Envio por conta do comprador, saindo de Joinville/SC."
 - Se quantidade for maior que 1, informe quantas unidades estão disponíveis dessa carta.
 - Se falar de embalagem, use apenas a ideia "em sleeve e bem protegida". NUNCA mencione toploader,
   caixa, plástico ou qualquer outro detalhe de embalagem.
 - SE A LISTA TIVER MAIS DE UMA CARTA, O ANÚNCIO TEM QUE FALAR DE TODAS, NENHUMA DE FORA. Uma chamada
   de abertura só (pode citar o lote como um todo), depois um bloco por carta — nome+código em negrito
-  e preço de cada uma — e só UMA linha de envio no final, cobrindo o lote inteiro."""
+  e preço de cada uma.
+- NÃO escreva nada sobre envio/frete, condição de troca, forma de pagamento ou link de loja — isso é
+  adicionado por fora, automaticamente, depois do seu texto. Termine seu texto logo após o(s)
+  bloco(s) de carta (preço/desconto/estado/observação), sem nenhuma linha de fechamento sobre esses
+  assuntos."""
 
 
 LOJA_URL = "https://www.jornadagames.com/store/baumgartengustavo"
+
+# emoji fixo por frase pronta (mesmo texto exato do checkbox no front-end) —
+# garante que cada frase sempre sai com a mesma referência visual, sem
+# depender da IA escolher um emoji diferente a cada anúncio.
+_FRASE_EMOJI = {
+    "Carta rara, poucas unidades no mercado.": "💎",
+    "Saiu do Booster direto pro Sleeve e Binder.": "🛡️",
+    "Somente venda, sem trocas.": "🚫",
+    "Envio pelo SuperFrete com opção a sua escolha.": "🚚",
+    "Aceito pagamento com cartão de crédito, consulte taxas.": "💳",
+}
 
 
 @app.post("/api/gerar")
@@ -481,23 +495,20 @@ def api_gerar():
         "CARTAS:\n" + json.dumps(ficha, ensure_ascii=False, indent=1) +
         "\n\nOBSERVAÇÃO DO VENDEDOR: " + (body.get("observacao") or "nenhuma") +
         "\n\n" + REGRAS +
-        (f"\n- Depois da linha de envio, acrescente também estas frases extras escolhidas pelo vendedor, "
-         f"cada uma em sua própria linha, EXATAMENTE como estão escritas (não reescreva, não traduza, "
-         f"não junte numa frase só):\n" + "\n".join(frases_extras) if frases_extras else "") +
-        (f"\n- Depois da linha de envio (e das frases extras, se houver), acrescente uma última linha, "
-         f"sem enfeite: \"Mais cartas na minha loja no JornadaGames: {LOJA_URL}\"." if incluir_loja else "") +
         '\n\nFORMATO — responda SÓ com este JSON:\n'
         '{"titulo":"chamada curta e chamativa sobre ' + ('o lote' if multiplas else 'a carta ou personagem')
         + ', pode ter 1 emoji",'
         '"curto":"chamada + ' + (f'um bloco por carta ({len(ficha)} cartas, todas)' if multiplas
                                   else '*Nome da carta | CODIGO-VARIANTE* em negrito')
-        + ' com preço + frete (com -X% MDL se houver) + linha de envio no final — direto mas não seco",'
+        + ' com preço + frete (com -X% MDL se houver) — direto mas não seco, sem linha de envio/frases '
+        'extras/loja no final (isso é adicionado por fora)",'
         '"completo":"chamada, 2 a 4 linhas de curiosidade real sobre ' + ('algum personagem do lote' if multiplas
                                                                           else 'o personagem') +
         ' no universo One Piece, depois ' + (f'um bloco por carta ({len(ficha)} cartas, todas)' if multiplas
                                               else 'o bloco da carta')
-        + ' com nome+código em negrito, preço, desconto e estado, observação do vendedor se houver, '
-        'linha de envio no final — sem dados de jogo (efeito, cor, custo, poder, arquétipo)"}'
+        + ' com nome+código em negrito, preço, desconto e estado, observação do vendedor se houver — '
+        'sem dados de jogo (efeito, cor, custo, poder, arquétipo) e sem linha de envio/frases extras/loja '
+        'no final (isso é adicionado por fora)"}'
     )
     try:
         d = parse_json(claude([{"role": "user", "content": prompt}], 1600 + 400 * len(ficha)))
@@ -518,6 +529,20 @@ def api_gerar():
             if preco_errado != preco_certo:
                 texto = texto.replace(preco_errado, preco_certo)
         d[campo] = texto
+
+    # Envio/frases extras/link da loja são texto FIXO e conhecido — monta essa
+    # parte em Python (emoji certo, espaçamento, quebra de linha) em vez de
+    # confiar na IA pra formatar igual toda vez. Some com linha em branco
+    # entre o bloco da carta e esse bloco de informações, e mais uma antes do
+    # link da loja, pra separar visualmente no WhatsApp.
+    info = "📍 Envio por conta do comprador, saindo de Joinville/SC."
+    for f in frases_extras:
+        info += f"\n{_FRASE_EMOJI.get(f, '▪️')} {f}"
+    if incluir_loja:
+        info += f"\n\n🛒 Mais cartas na minha loja no JornadaGames:\n{LOJA_URL}"
+    for campo in ("curto", "completo"):
+        texto = (d.get(campo) or "").rstrip()
+        d[campo] = (texto + "\n\n" + info) if texto else info
 
     return jsonify(titulo=d.get("titulo", ""), curto=d.get("curto", ""), completo=d.get("completo", ""))
 
