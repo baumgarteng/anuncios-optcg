@@ -382,6 +382,7 @@ def api_gerar():
     if not cards:
         return jsonify(erro="nenhuma carta informada"), 400
     incluir_loja = bool(body.get("incluir_loja"))
+    frases_extras = [f.strip() for f in (body.get("frases") or []) if isinstance(f, str) and f.strip()]
 
     ficha = []
     for c in cards:
@@ -417,8 +418,11 @@ def api_gerar():
         "CARTAS:\n" + json.dumps(ficha, ensure_ascii=False, indent=1) +
         "\n\nOBSERVAÇÃO DO VENDEDOR: " + (body.get("observacao") or "nenhuma") +
         "\n\n" + REGRAS +
-        (f"\n- Depois da linha de envio, acrescente uma última linha, sem enfeite: "
-         f"\"Mais cartas na minha loja no JornadaGames: {LOJA_URL}\"." if incluir_loja else "") +
+        (f"\n- Depois da linha de envio, acrescente também estas frases extras escolhidas pelo vendedor, "
+         f"cada uma em sua própria linha, EXATAMENTE como estão escritas (não reescreva, não traduza, "
+         f"não junte numa frase só):\n" + "\n".join(frases_extras) if frases_extras else "") +
+        (f"\n- Depois da linha de envio (e das frases extras, se houver), acrescente uma última linha, "
+         f"sem enfeite: \"Mais cartas na minha loja no JornadaGames: {LOJA_URL}\"." if incluir_loja else "") +
         '\n\nFORMATO — responda SÓ com este JSON:\n'
         '{"titulo":"chamada curta e chamativa sobre ' + ('o lote' if multiplas else 'a carta ou personagem')
         + ', pode ter 1 emoji",'
