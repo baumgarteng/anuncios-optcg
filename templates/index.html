@@ -495,6 +495,7 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
     <div class="editor-controls">
       <div class="row">
         <button class="btn ghost sm" id="ed-auto">✨ Auto melhorar</button>
+        <button class="btn ghost sm" id="ed-ia">🧠 IA: nitidez e ruído</button>
         <button class="btn ghost sm" id="ed-rotate-l">Girar ↺</button>
         <button class="btn ghost sm" id="ed-rotate-r">Girar ↻</button>
         <button class="btn ghost sm" id="ed-flip">Espelhar</button>
@@ -678,6 +679,30 @@ $('#ed-auto').onclick=()=>{
   $('#ed-sat').value=saturation;
   updateEditorFilter();
   toast('Ajuste automático aplicado — dá pra afinar nos controles');
+};
+$('#ed-ia').onclick=async()=>{
+  const img=$('#editor-img');
+  if(!img.naturalWidth)return;
+  const btn=$('#ed-ia');
+  const original=btn.textContent;
+  btn.disabled=true;btn.textContent='Processando…';
+  try{
+    const d=await api('/api/melhorar-foto',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({imagem:img.src})});
+    await new Promise(res=>{
+      img.onload=()=>{
+        if(cropper){cropper.destroy();cropper=null;}
+        cropper=new Cropper(img,{viewMode:1,background:false,autoCropArea:1,zoomOnWheel:true});
+        res();
+      };
+      img.src=d.imagem;
+    });
+    toast('Ruído e nitidez tratados — recorte se ajustou, confira antes de aplicar');
+  }catch(e){
+    showErr('Não consegui processar a imagem: '+e.message);
+  }finally{
+    btn.disabled=false;btn.textContent=original;
+  }
 };
 ['ed-bright','ed-contrast','ed-sat'].forEach(id=>$('#'+id).addEventListener('input',updateEditorFilter));
 $('#ed-align').addEventListener('input',applyRotation);

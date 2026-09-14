@@ -3,6 +3,8 @@ import psycopg
 from psycopg.rows import dict_row
 import urllib.request
 import urllib.parse
+import numpy as np
+import cv2
 from flask import Flask, request, jsonify, render_template
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -348,6 +350,60 @@ def api_traduzir():
     except Exception as e:
         return jsonify(erro=f"falha ao traduzir: {e}"), 502
     return jsonify(traduzido=traduzido.strip())
+
+
+@app.post("/api/melhorar-foto")
+def api_melhorar_foto():
+    """Melhora qualidade da foto (ruído/nitidez/contraste local) sem alterar
+    o conteúdo — nada de super-resolução generativa, que pode "inventar"
+    textura/detalhe que não existe na foto real. Só processamento de imagem
+    clássico (denoise + CLAHE + unsharp mask), determinístico e sem chamar IA
+    externa nenhuma."""
+    dados = (request.json or {}).get("imagem") or ""
+    m = re.match(r"^data:image/\w+;base64,(.+)$", dados, re.S)
+    if not m:
+        return jsonify(erro="imagem inválida"), 400
+    try:
+        raw = base64.b64decode(m.group(1))
+        arr = np.frombuffer(raw, dtype=np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise ValueError("formato de imagem não reconhecido")
+    except Exception as e:
+        return jsonify(erro=f"imagem inválida: {e}"), 400
+
+    # limite de tamanho pra manter o processamento rápido num servidor sem GPU
+    max_lado = 1600
+    h, w = img.shape[:2]
+    if max(h, w) > max_lado:
+        escala = max_lado / max(h, w)
+        img = cv2.resize(img, (int(w * escala), int(h * escala)), interpolation=cv2.INTER_AREA)
+
+    try:
+        # 1) remove ruído de sensor/compressão preservando bordas (evita
+        #    borrar o texto/arte da carta)
+        den = cv2.fastNlMeansDenoisingColored(img, None, 6, 6, 7, 21)
+
+        # 2) contraste local adaptativo — compensa luz desigual e reflexo de
+        #    sleeve sem estourar o resto da foto (CLAHE só no canal de luz)
+        lab = cv2.cvtColor(den, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        l = clahe.apply(l)
+        out = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
+
+        # 3) nitidez (unsharp mask) pra recuperar detalhe fino que o denoise
+        #    suaviza — reforça bordas já existentes, não desenha nada novo
+        blur = cv2.GaussianBlur(out, (0, 0), sigmaX=3)
+        out = cv2.addWeighted(out, 1.5, blur, -0.5, 0)
+    except Exception as e:
+        return jsonify(erro=f"falha ao processar imagem: {e}"), 500
+
+    ok, buf = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 92])
+    if not ok:
+        return jsonify(erro="falha ao gerar imagem processada"), 500
+    b64 = base64.b64encode(buf.tobytes()).decode()
+    return jsonify(imagem=f"data:image/jpeg;base64,{b64}")
 
 
 @app.post("/api/identificar")
