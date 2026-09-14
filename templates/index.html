@@ -144,6 +144,11 @@ body{
 .drop p{margin:0;font-weight:700}
 .drop small{color:var(--muted-foreground);display:block;margin-top:5px}
 .shots{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}
+.mosaic-box{
+  margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--card-2);
+}
+.mosaic-box label{font-size:12.5px;font-weight:800;color:var(--secondary-foreground);letter-spacing:.02em;white-space:normal}
+#mosaic-preview{width:100%;max-height:260px;object-fit:contain;border-radius:10px;margin-top:10px;border:1px solid var(--border);background:var(--muted)}
 .shot{
   position:relative;width:76px;height:106px;border-radius:12px;overflow:hidden;border:1px solid var(--border);
   box-shadow:0 8px 16px -10px rgba(var(--shadow-tint),.45);transition:transform .25s cubic-bezier(.34,1.56,.64,1);
@@ -373,6 +378,23 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
         </div>
         <input type="file" id="file" accept="image/*" multiple class="hide">
         <div class="shots" id="shots"></div>
+
+        <div class="mosaic-box hide" id="mosaic-box">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <label style="margin:0">Mosaico das fotos</label>
+            <div class="seg" id="seg-mosaico">
+              <button data-mm="harmonizado" aria-pressed="true">Harmonizado</button>
+              <button data-mm="simples" aria-pressed="false">Colagem simples</button>
+            </div>
+          </div>
+          <img id="mosaic-preview" alt="" style="display:none">
+          <div class="row" style="margin-top:10px">
+            <button class="btn ghost sm" id="btn-mosaico-gerar">Gerar mosaico</button>
+            <button class="btn ghost sm" id="btn-mosaico-copiar" disabled>Copiar mosaico</button>
+            <button class="btn ghost sm" id="btn-mosaico-salvar" disabled>Salvar mosaico</button>
+          </div>
+        </div>
+
         <div class="row" style="margin-top:14px">
           <button class="btn" id="btn-id" disabled>Identificar cartas</button>
           <button class="btn ghost sm" id="btn-manual">Preencher na mão</button>
@@ -584,6 +606,8 @@ function renderShots(){
       <button class="rm" data-i="${i}" aria-label="Remover">&times;</button>
     </div></div>`).join('');
   $('#btn-id').disabled=!photos.length;
+  $('#mosaic-box').classList.toggle('hide', photos.length<2);
+  invalidarMosaico();
   renderPreview();
 }
 
@@ -887,6 +911,97 @@ async function dataURLtoPngBlob(dataUrl){
     img.src=dataUrl;
   });
 }
+
+/* ---------- mosaico das fotos ---------- */
+let mosaicMode='harmonizado', mosaicBlob=null;
+function loadImgEl(src){
+  return new Promise((res,rej)=>{
+    const im=new Image();
+    im.onload=()=>res(im);
+    im.onerror=()=>rej(new Error('falha ao carregar uma das fotos'));
+    im.src=src;
+  });
+}
+function invalidarMosaico(){
+  mosaicBlob=null;
+  $('#mosaic-preview').style.display='none';
+  $('#btn-mosaico-copiar').disabled=true;
+  $('#btn-mosaico-salvar').disabled=true;
+}
+async function gerarMosaico(){
+  if(photos.length<2)return;
+  const btn=$('#btn-mosaico-gerar');
+  btn.disabled=true;
+  try{
+    const imgs=await Promise.all(photos.map(p=>loadImgEl(p.full)));
+    const n=imgs.length, cols=Math.ceil(Math.sqrt(n)), rows=Math.ceil(n/cols);
+    const harmonizado=mosaicMode==='harmonizado';
+    const cellW=520, cellH=720;
+    const gap=harmonizado?26:0, pad=harmonizado?32:0, radius=harmonizado?18:0;
+    const W=pad*2+cols*cellW+(cols-1)*gap, H=pad*2+rows*cellH+(rows-1)*gap;
+    const c=document.createElement('canvas');c.width=W;c.height=H;
+    const ctx=c.getContext('2d');
+    if(harmonizado){
+      const g=ctx.createLinearGradient(0,0,W,H);
+      g.addColorStop(0,'#fff8e6');g.addColorStop(1,'#ffe6b0');
+      ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    }
+    function roundRect(x,y,w,h,r){
+      ctx.beginPath();
+      ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+    }
+    imgs.forEach((im,i)=>{
+      const col=i%cols, row=Math.floor(i/cols);
+      const x=pad+col*(cellW+gap), y=pad+row*(cellH+gap);
+      if(harmonizado){
+        ctx.save();
+        ctx.shadowColor='rgba(20,35,50,.35)';ctx.shadowBlur=22;ctx.shadowOffsetY=10;
+        roundRect(x,y,cellW,cellH,radius);ctx.fillStyle='#000';ctx.fill();
+        ctx.restore();
+      }
+      ctx.save();
+      if(radius)roundRect(x,y,cellW,cellH,radius);else ctx.rect(x,y,cellW,cellH);
+      ctx.clip();
+      const scale=Math.max(cellW/im.width,cellH/im.height);
+      const dw=im.width*scale, dh=im.height*scale;
+      ctx.drawImage(im,x+(cellW-dw)/2,y+(cellH-dh)/2,dw,dh);
+      ctx.restore();
+    });
+    $('#mosaic-preview').src=c.toDataURL('image/png');
+    $('#mosaic-preview').style.display='block';
+    mosaicBlob=await new Promise(res=>c.toBlob(res,'image/png'));
+    $('#btn-mosaico-copiar').disabled=false;
+    $('#btn-mosaico-salvar').disabled=false;
+  }catch(e){
+    showErr('Não consegui montar o mosaico: '+e.message);
+  }finally{
+    btn.disabled=false;
+  }
+}
+$('#seg-mosaico').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-mm]');
+  if(!b)return;
+  mosaicMode=b.dataset.mm;
+  $$('#seg-mosaico button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.mm===mosaicMode)));
+  if(mosaicBlob)gerarMosaico();
+});
+$('#btn-mosaico-gerar').onclick=gerarMosaico;
+$('#btn-mosaico-copiar').onclick=async()=>{
+  if(!mosaicBlob)return;
+  try{
+    await navigator.clipboard.write([new ClipboardItem({'image/png':mosaicBlob})]);
+    toast('Mosaico copiado');
+  }catch(e){showErr('O navegador bloqueou a cópia do mosaico.');}
+};
+$('#btn-mosaico-salvar').onclick=()=>{
+  if(!mosaicBlob)return;
+  const url=URL.createObjectURL(mosaicBlob);
+  const a=document.createElement('a');
+  a.href=url;a.download='mosaico-cartas.png';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+};
 
 $('#drop').onclick=()=>$('#file').click();
 $('#drop').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#file').click();}};
