@@ -145,11 +145,13 @@ def buscar_carta(code, variant=""):
         # histórico) sempre que o snapshot de preço tivesse zerado mas o
         # histórico de preço ainda existisse.
         cur.execute(
-            """SELECT catalog_id, liga_code, liga_price, liga_preco_min, liga_preco_max,
-                      liga_suffix, liga_page_url, liga_image_url, updated_at
-                 FROM liga_catalog_map
-                WHERE base_code = %s AND liga_page_url IS NOT NULL
-                ORDER BY updated_at DESC NULLS LAST""",
+            """SELECT m.catalog_id, m.liga_code, m.liga_price, m.liga_preco_min, m.liga_preco_max,
+                      m.liga_suffix, m.liga_page_url, m.liga_image_url, m.updated_at,
+                      s.store_count, s.total_stock, s.checked_at AS estoque_checado_em
+                 FROM liga_catalog_map m
+                 LEFT JOIN liga_price_snapshot s ON s.liga_url = m.liga_page_url
+                WHERE m.base_code = %s AND m.liga_page_url IS NOT NULL
+                ORDER BY m.updated_at DESC NULLS LAST""",
             (base,),
         )
         candidatos = cur.fetchall()
@@ -234,6 +236,9 @@ def buscar_carta(code, variant=""):
             "codigo": ref["liga_code"],
             "url": ref["liga_page_url"],
             "atualizado": ref["updated_at"].isoformat() if ref["updated_at"] else None,
+            "lojas": ref["store_count"],
+            "estoque_total": ref["total_stock"],
+            "estoque_atualizado": ref["estoque_checado_em"].isoformat() if ref["estoque_checado_em"] else None,
         },
     }
 

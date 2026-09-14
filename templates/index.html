@@ -778,6 +778,15 @@ function hintHTML(i){
   else if(diff!=null&&diff<0)diffTxt=` — seu preço fica <b>${-diff}% acima</b>`;
   else if(diff===0)diffTxt=' — igual ao preço da Liga';
   const linha=`${precoTxt} <span style="opacity:.6">(${esc(c.liga.codigo||'')}${atualizado?' · atualizado em '+atualizado:''})</span>${diffTxt}`;
+  let estoqueTxt='';
+  if(c.liga.lojas!=null){
+    if(c.liga.lojas===0){
+      estoqueTxt=`<br><span style="color:var(--destructive);font-weight:700">⚠️ Sem estoque em nenhuma loja no momento</span>`;
+    }else{
+      const unidades=c.liga.estoque_total!=null?` (≈${c.liga.estoque_total} unidades)`:'';
+      estoqueTxt=`<br>🏪 ${c.liga.lojas} loja${c.liga.lojas>1?'s':''} vendendo agora${unidades}`;
+    }
+  }
   const acoes=c.liga.url
     ?`<div class="mini-actions">
         <button class="btn ghost sm" data-refresh="${i}">Atualizar</button>
@@ -785,7 +794,7 @@ function hintHTML(i){
         <a class="btn ghost sm" href="${c.liga.url}" target="_blank" rel="noopener">Ver na Liga</a>
       </div>`
     :'';
-  return linha+acoes;
+  return linha+estoqueTxt+acoes;
 }
 function updateCardHint(i){
   const el=document.querySelector(`[data-hint="${i}"]`);
