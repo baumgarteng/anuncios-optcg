@@ -586,7 +586,8 @@ function resize(file,maxDim,q){
       im.onload=()=>{let w=im.width,h=im.height;const s=Math.min(1,maxDim/Math.max(w,h));
         w=Math.round(w*s);h=Math.round(h*s);
         const c=document.createElement('canvas');c.width=w;c.height=h;
-        c.getContext('2d').drawImage(im,0,0,w,h);res(c.toDataURL('image/jpeg',q));};
+        const cx=c.getContext('2d');cx.imageSmoothingQuality='high';cx.drawImage(im,0,0,w,h);
+        res(c.toDataURL('image/jpeg',q));};
       im.src=fr.result;};
     fr.readAsDataURL(file);});
 }
@@ -595,7 +596,7 @@ async function addFiles(list){
   clearErr();
   const fs=[...list].filter(f=>f.type.startsWith('image/')).slice(0,4-photos.length);
   for(const f of fs){
-    try{photos.push({full:await resize(f,900,.78),thumb:await resize(f,150,.7)});}
+    try{photos.push({full:await resize(f,1600,.92),thumb:await resize(f,150,.7)});}
     catch(e){showErr('Uma das imagens não pôde ser lida.');}
   }
   renderShots();
@@ -717,15 +718,15 @@ $('#ed-reset').onclick=()=>{
 $('#ed-cancel').onclick=closeEditor;
 $('#ed-apply').onclick=()=>{
   if(!cropper||!editTarget){closeEditor();return;}
-  const canvas=cropper.getCroppedCanvas({maxWidth:1400,maxHeight:1400});
+  const canvas=cropper.getCroppedCanvas({maxWidth:1800,maxHeight:1800,imageSmoothingQuality:'high'});
   const out=document.createElement('canvas');out.width=canvas.width;out.height=canvas.height;
   const ctx=out.getContext('2d');
   ctx.filter=`brightness(${$('#ed-bright').value}%) contrast(${$('#ed-contrast').value}%) saturate(${$('#ed-sat').value}%)`;
   ctx.drawImage(canvas,0,0);
-  const full=out.toDataURL('image/jpeg',.85);
+  const full=out.toDataURL('image/jpeg',.95);
   const s=Math.min(1,150/Math.max(out.width,out.height));
   const tc=document.createElement('canvas');tc.width=Math.round(out.width*s);tc.height=Math.round(out.height*s);
-  tc.getContext('2d').drawImage(out,0,0,tc.width,tc.height);
+  const tctx=tc.getContext('2d');tctx.imageSmoothingQuality='high';tctx.drawImage(out,0,0,tc.width,tc.height);
   const resultado={full,thumb:tc.toDataURL('image/jpeg',.7)};
   if(editTarget.type==='verso'){cards[editTarget.i].verso=resultado;renderCards();}
   else{photos[editTarget.i]=resultado;renderShots();if(cards.length)renderCards();}
@@ -1003,6 +1004,7 @@ async function gerarMosaico(){
     const W=pad*2+cols*cellW+(cols-1)*gap, H=pad*2+rows*cellH+(rows-1)*gap;
     const c=document.createElement('canvas');c.width=W;c.height=H;
     const ctx=c.getContext('2d');
+    ctx.imageSmoothingQuality='high';
     if(harmonizado){
       const g=ctx.createLinearGradient(0,0,W,H);
       g.addColorStop(0,'#fff8e6');g.addColorStop(1,'#ffe6b0');
@@ -1148,7 +1150,7 @@ $('#file-verso').onchange=async e=>{
   e.target.value='';
   if(!f||versoAlvo<0)return;
   try{
-    cards[versoAlvo].verso={full:await resize(f,900,.78),thumb:await resize(f,150,.7)};
+    cards[versoAlvo].verso={full:await resize(f,1600,.92),thumb:await resize(f,150,.7)};
     renderCards();
   }catch(err){showErr('Não consegui ler a foto do verso.');}
 };
