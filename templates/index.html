@@ -378,23 +378,6 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
         </div>
         <input type="file" id="file" accept="image/*" multiple class="hide">
         <div class="shots" id="shots"></div>
-
-        <div class="mosaic-box hide" id="mosaic-box">
-          <div class="row" style="justify-content:space-between;align-items:center">
-            <label style="margin:0">Mosaico das fotos</label>
-            <div class="seg" id="seg-mosaico">
-              <button data-mm="harmonizado" aria-pressed="true">Harmonizado</button>
-              <button data-mm="simples" aria-pressed="false">Colagem simples</button>
-            </div>
-          </div>
-          <img id="mosaic-preview" alt="" style="display:none">
-          <div class="row" style="margin-top:10px">
-            <button class="btn ghost sm" id="btn-mosaico-gerar">Gerar mosaico</button>
-            <button class="btn ghost sm" id="btn-mosaico-copiar" disabled>Copiar mosaico</button>
-            <button class="btn ghost sm" id="btn-mosaico-salvar" disabled>Salvar mosaico</button>
-          </div>
-        </div>
-
         <div class="row" style="margin-top:14px">
           <button class="btn" id="btn-id" disabled>Identificar cartas</button>
           <button class="btn ghost sm" id="btn-manual">Preencher na mão</button>
@@ -461,6 +444,23 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
             </div>
           </div>
         </div>
+
+        <div class="mosaic-box hide" id="mosaic-box">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <label style="margin:0">Mosaico das fotos</label>
+            <div class="seg" id="seg-mosaico">
+              <button data-mm="harmonizado" aria-pressed="true">Harmonizado</button>
+              <button data-mm="simples" aria-pressed="false">Colagem simples</button>
+            </div>
+          </div>
+          <img id="mosaic-preview" alt="" style="display:none">
+          <div class="row" style="margin-top:10px">
+            <button class="btn ghost sm" id="btn-mosaico-gerar">Gerar mosaico</button>
+            <button class="btn ghost sm" id="btn-mosaico-copiar" disabled>Copiar mosaico</button>
+            <button class="btn ghost sm" id="btn-mosaico-salvar" disabled>Salvar mosaico</button>
+          </div>
+        </div>
+
         <div class="row" style="margin-top:14px">
           <button class="btn" id="btn-copy" disabled style="flex:1">Copiar texto</button>
           <button class="btn" id="btn-copy-img" disabled style="flex:1">Copiar imagens</button>
@@ -606,7 +606,6 @@ function renderShots(){
       <button class="rm" data-i="${i}" aria-label="Remover">&times;</button>
     </div></div>`).join('');
   $('#btn-id').disabled=!photos.length;
-  $('#mosaic-box').classList.toggle('hide', photos.length<2);
   invalidarMosaico();
   renderPreview();
 }
@@ -839,6 +838,7 @@ function renderPreview(){
   $('#btn-copy-img').disabled=!totalImgs;
   copyImgIndex=0;
   $('#btn-copy-img').textContent=totalImgs>1?`Copiar imagens (0/${totalImgs})`:'Copiar imagens';
+  $('#mosaic-box').classList.toggle('hide', !(gen && photos.length>=2));
 }
 
 function limpar(){
