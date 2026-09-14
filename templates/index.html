@@ -494,6 +494,7 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
     <div class="editor-stage"><img id="editor-img" alt=""></div>
     <div class="editor-controls">
       <div class="row">
+        <button class="btn ghost sm" id="ed-auto">✨ Auto melhorar</button>
         <button class="btn ghost sm" id="ed-rotate-l">Girar ↺</button>
         <button class="btn ghost sm" id="ed-rotate-r">Girar ↻</button>
         <button class="btn ghost sm" id="ed-flip">Espelhar</button>
@@ -642,6 +643,42 @@ function closeEditor(){
   $('#editor-overlay').classList.add('hide');
   editTarget=null;
 }
+function sugerirAutoMelhorar(img){
+  const sw=120, sh=Math.max(1,Math.round(sw*img.naturalHeight/img.naturalWidth));
+  const sc=document.createElement('canvas');sc.width=sw;sc.height=sh;
+  const sctx=sc.getContext('2d');
+  sctx.drawImage(img,0,0,sw,sh);
+  const data=sctx.getImageData(0,0,sw,sh).data;
+  const n=sw*sh;
+  const lums=new Float32Array(n);
+  let sumSat=0;
+  for(let i=0;i<n;i++){
+    const r=data[i*4],g=data[i*4+1],b=data[i*4+2];
+    lums[i]=0.299*r+0.587*g+0.114*b;
+    const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+    sumSat+=mx?(mx-mn)/mx:0;
+  }
+  const avgL=lums.reduce((a,v)=>a+v,0)/n;
+  const avgSat=sumSat/n;
+  const sorted=Array.from(lums).sort((a,b)=>a-b);
+  const p5=sorted[Math.floor(n*0.05)], p95=sorted[Math.floor(n*0.95)];
+  const range=Math.max(p95-p5,1);
+
+  const brightness=Math.min(140,Math.max(80,Math.round(100*(128/Math.max(avgL,30)))));
+  const contrast=Math.min(150,Math.max(100,Math.round(100*(190/range))));
+  const saturation=avgSat<0.25?118:(avgSat<0.4?108:100);
+  return {brightness,contrast,saturation};
+}
+$('#ed-auto').onclick=()=>{
+  const img=$('#editor-img');
+  if(!img.naturalWidth)return;
+  const {brightness,contrast,saturation}=sugerirAutoMelhorar(img);
+  $('#ed-bright').value=brightness;
+  $('#ed-contrast').value=contrast;
+  $('#ed-sat').value=saturation;
+  updateEditorFilter();
+  toast('Ajuste automático aplicado — dá pra afinar nos controles');
+};
 ['ed-bright','ed-contrast','ed-sat'].forEach(id=>$('#'+id).addEventListener('input',updateEditorFilter));
 $('#ed-align').addEventListener('input',applyRotation);
 $('#ed-rotate-l').onclick=()=>{rot90=(rot90-90+360)%360;applyRotation();};
