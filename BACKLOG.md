@@ -3,7 +3,9 @@
 Ideias e pedidos que ficaram pra depois — não implementados ainda. Ordem de listagem, não de prioridade.
 
 ## ~~1. Integração com a API do SuperFrete~~ ✅ feito em 2026-09-15
-Calculadora de frete real no topo de "Anúncios Salvos" (`POST /api/frete/calcular`, testado contra a API de produção). Fluxo completo de etiqueta (`/api/vendas/<id>/etiqueta`) também implementado — cria pedido, paga com o saldo da carteira e grava o link do PDF + rastreio — mas **ainda não testado com dinheiro de verdade**. Teste com cuidado na primeira venda real antes de confiar nele.
+Calculadora de frete real no topo de "Anúncios Salvos" (`POST /api/frete/calcular`, testado contra a API de produção). Fluxo completo de etiqueta (`/api/vendas/<id>/etiqueta`) também implementado — cria pedido, paga com o saldo da carteira e grava o link do PDF + rastreio.
+
+Testado com dinheiro de verdade: um pedido com endereço errado deu erro e foi cancelado direto no painel da SuperFrete. Como `etiqueta_url` já tinha sido gravado, o app só oferecia "Ver etiqueta" (uma etiqueta cancelada), sem jeito de gerar outra depois de corrigir o endereço — resolvido no item 11.
 
 ## 2. Dados de pagamento pro comprador
 Adicionar um jeito de guardar (e opcionalmente incluir no anúncio ou mandar direto pro interessado) os dados de pagamento — chave PIX, ou outro método aceito. Definir se isso entra no texto do anúncio, fica só salvo pra copiar quando alguém se interessa, ou aparece em algum outro fluxo.
@@ -37,6 +39,13 @@ O snapshot `cards` da venda agora carrega `image_url` (tanto vindo do fluxo "Ven
 Um anúncio com várias cartas continua gerando UM texto (o post completo, pra colar no WhatsApp), mas ao salvar agora cria **uma linha em `anuncio` por carta** (cada uma com o mesmo texto e um `lote_id` em comum, só pra indicar na lista "parte de um lote de N"). Isso permite marcar/vender cada carta do post separadamente.
 
 Na aba Anúncios, cada linha ganhou um checkbox e um botão "Gerar venda com selecionadas": dá pra marcar cartas de anúncios diferentes (de lotes diferentes até) e gerar **uma venda só**, com um comprador e um frete cobrindo todas. `venda.anuncio_ids` (array, substituiu o `anuncio_id` singular) guarda todos os anúncios ligados — excluir a venda desfaz o status `vendida` de todos eles.
+
+## ~~11. [bug] Sem jeito de gerar outra etiqueta depois de uma cancelada~~ ✅ feito em 2026-09-15
+Uma vez que `etiqueta_url` era gravado, a tela só mostrava "Ver etiqueta" pra sempre — mesmo que o pedido tivesse sido cancelado na SuperFrete (ex.: erro no endereço, corrigido só depois). Agora, ao lado de "Ver etiqueta":
+- **"Verificar status"** — consulta `GET /api/v0/orders/{order_id}` na SuperFrete (só leitura, não gasta saldo) e atualiza `etiqueta_status` com o que eles responderem.
+- **"Etiqueta cancelada, gerar outra"** — com confirmação, esquece a etiqueta gravada aqui (não cancela nem reembolsa nada na SuperFrete, isso é feito manualmente lá) e libera "Gerar etiqueta" de novo.
+
+Endpoint de status baseado no mapeamento da API feito pelo pacote `deco-cx/apps/superfrete` (comunidade, não é doc oficial) — vale confirmar contra a doc oficial (https://superfrete.readme.io/reference) se o campo `status` não vier como esperado.
 
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-15. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
