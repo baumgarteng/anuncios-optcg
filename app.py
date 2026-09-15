@@ -51,6 +51,9 @@ def init_db():
     try:
         with conn() as c, c.cursor() as cur:
             cur.execute(SCHEMA)
+            # coluna nova numa tabela que já existe — ADD COLUMN IF NOT EXISTS
+            # é aditivo e seguro, diferente de mexer em coluna já existente.
+            cur.execute("ALTER TABLE anuncio ADD COLUMN IF NOT EXISTS vendido_em timestamptz")
             c.commit()
         app.logger.info("schema ok")
     except Exception as e:
@@ -682,17 +685,20 @@ def api_listar():
         with conn() as c, c.cursor() as cur:
             cur.execute(
                 """SELECT a.id, a.criado_em, a.titulo, a.texto_curto, a.texto_completo,
-                          a.total, a.cards,
+                          a.total, a.cards, a.status, a.vendido_em,
                           (SELECT dados FROM anuncio_imagem i
                             WHERE i.anuncio_id = a.id ORDER BY ordem LIMIT 1) AS capa
                      FROM anuncio a
                     WHERE %s = '' OR a.cards::text ILIKE '%%'||%s||'%%'
                     ORDER BY a.criado_em DESC LIMIT 100""", (q, q))
             rows = cur.fetchall()
+            cur.execute("SELECT count(*) AS n FROM anuncio WHERE status = 'vendida'")
+            vendidos = cur.fetchone()["n"]
         for r in rows:
             r["criado_em"] = r["criado_em"].isoformat()
+            r["vendido_em"] = r["vendido_em"].isoformat() if r["vendido_em"] else None
             r["total"] = float(r["total"] or 0)
-        return jsonify(anuncios=rows)
+        return jsonify(anuncios=rows, vendidos=vendidos)
     except Exception as e:
         return jsonify(erro=str(e)), 500
 
@@ -704,6 +710,32 @@ def api_excluir(aid):
             cur.execute("DELETE FROM anuncio WHERE id = %s", (aid,))
             c.commit()
         return jsonify(ok=True)
+    except Exception as e:
+        return jsonify(erro=str(e)), 500
+
+
+@app.post("/api/anuncios/<int:aid>/vender")
+def api_marcar_vendida(aid):
+    """Alterna entre vendida/publicado — confirma a venda de um anúncio já
+    salvo, ou desfaz se clicado de novo. vendido_em guarda quando a venda foi
+    confirmada, usado pra contar vendas (não precisa de tabela separada, dá
+    pra contar direto pelo status)."""
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute("SELECT status FROM anuncio WHERE id = %s", (aid,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify(erro="anúncio não encontrado"), 404
+            if row["status"] == "vendida":
+                cur.execute(
+                    "UPDATE anuncio SET status='publicado', vendido_em=NULL WHERE id=%s", (aid,))
+                novo_status = "publicado"
+            else:
+                cur.execute(
+                    "UPDATE anuncio SET status='vendida', vendido_em=now() WHERE id=%s", (aid,))
+                novo_status = "vendida"
+            c.commit()
+        return jsonify(id=aid, status=novo_status)
     except Exception as e:
         return jsonify(erro=str(e)), 500
 
