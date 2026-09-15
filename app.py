@@ -828,7 +828,10 @@ def api_vendas_listar():
     try:
         with conn() as c, c.cursor() as cur:
             cur.execute(
-                """SELECT v.* FROM venda v
+                """SELECT v.*,
+                          (SELECT dados FROM anuncio_imagem i
+                            WHERE i.anuncio_id = v.anuncio_id ORDER BY ordem LIMIT 1) AS capa_anuncio
+                     FROM venda v
                     WHERE %s = '' OR v.cards::text ILIKE '%%'||%s||'%%'
                        OR v.comprador ILIKE '%%'||%s||'%%'
                     ORDER BY v.criado_em DESC LIMIT 300""", (q, q, q))

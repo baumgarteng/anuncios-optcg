@@ -1491,7 +1491,7 @@ $('#saved').addEventListener('click',async e=>{
     if(!ad)return;
     const cartas=(ad.cards||[]).map(c=>({
       nome:c.name||'', codigo:(c.code||'')+(c.variant?'-'+c.variant:''),
-      preco:c.preco??'', quantidade:c.quantidade||1,
+      preco:c.preco??'', quantidade:c.quantidade||1, image_url:c.image_url||null,
     }));
     abrirVendaModal({origem:'whatsapp_grupo',cards:cartas},ad.id);
   }
@@ -1604,8 +1604,11 @@ function renderVendasList(){
     const etiquetaBtn=v.etiqueta_url
       ?`<a class="btn ghost sm" href="${v.etiqueta_url}" target="_blank" rel="noopener">Ver etiqueta</a>`
       :`<button class="btn ghost sm" data-etiqueta="${v.id}" ${temEndereco?'':'disabled title="Preencha o endereço completo em Editar"'}>Gerar etiqueta</button>`;
+    const imgVenda=cs.map(c=>c.image_url).find(Boolean)||v.capa_anuncio;
+    const thumbVenda=imgVenda?`<img class="sv-thumb" src="${imgVenda}" alt="">`
+      :`<div class="sv-thumb" style="display:flex;align-items:center;justify-content:center">${ICO_CARD}</div>`;
     return `<div class="sv-row">
-      <div class="sv-thumb" style="display:flex;align-items:center;justify-content:center">${ICO_CARD}</div>
+      ${thumbVenda}
       <div class="sv-info">
         <div class="sv-name">${esc(nome)}</div>
         <div class="sv-meta mono">${esc(origemTxt)}${v.comprador?' · '+esc(v.comprador):''} · ${brl(v.preco_total)} · ${new Date(v.criado_em).toLocaleDateString('pt-BR')}</div>
@@ -1711,7 +1714,8 @@ $('#btn-venda-externa').onclick=()=>abrirVendaModal(null);
 $('#v-cancel').onclick=()=>$('#venda-overlay').classList.add('hide');
 $('#v-salvar').onclick=async()=>{
   const cartas=vendaCartasTmp.filter(c=>c.nome||c.codigo).map(c=>({
-    nome:c.nome,codigo:c.codigo,preco:Number(String(c.preco).replace(',','.'))||0,quantidade:Number(c.quantidade)||1
+    nome:c.nome,codigo:c.codigo,preco:Number(String(c.preco).replace(',','.'))||0,quantidade:Number(c.quantidade)||1,
+    image_url:c.image_url||null
   }));
   const endereco={
     nome:$('#v-end-nome').value.trim(),cpf:$('#v-end-cpf').value.replace(/\D/g,''),cep:$('#v-end-cep').value.replace(/\D/g,''),
