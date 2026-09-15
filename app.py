@@ -701,7 +701,7 @@ def api_salvar():
     ids = []
     try:
         with conn() as c, c.cursor() as cur:
-            for card in cards:
+            for i, card in enumerate(cards):
                 total_carta = float(card.get("preco") or 0) * int(card.get("quantidade") or 1)
                 cur.execute(
                     """INSERT INTO anuncio (titulo, texto_curto, texto_completo, observacao, total, cards,
@@ -711,10 +711,20 @@ def api_salvar():
                      total_carta, json.dumps([card], ensure_ascii=False), lote_id))
                 aid = cur.fetchone()["id"]
                 ids.append(aid)
-                for i, img in enumerate(imagens):
+                # cada carta leva só a(s) foto(s) DELA: a foto na mesma posição
+                # em que ela apareceu no formulário (photos[i] casa com
+                # cards[i], mesma convenção da tela de criação) e o verso
+                # próprio, se tiver — nunca a foto de outra carta do lote.
+                fotos_da_carta = []
+                if i < len(imagens):
+                    fotos_da_carta.append(imagens[i])
+                verso = (card.get("verso") or {}).get("full")
+                if verso:
+                    fotos_da_carta.append(verso)
+                for j, img in enumerate(fotos_da_carta):
                     cur.execute(
                         "INSERT INTO anuncio_imagem (anuncio_id, ordem, dados) VALUES (%s,%s,%s)",
-                        (aid, i, img))
+                        (aid, j, img))
             c.commit()
         return jsonify(ids=ids, id=ids[0])
     except Exception as e:
