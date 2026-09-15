@@ -292,6 +292,14 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
 .sv-row.is-sold .sv-name{text-decoration:line-through;text-decoration-color:var(--muted-foreground)}
 .sv-meta{font-size:12px;color:var(--muted-foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;font-variant-numeric:tabular-nums}
 .sv-actions{display:flex;gap:6px;flex-shrink:0;margin-left:auto}
+.stat-tile{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:9px 16px;min-width:104px}
+.stat-tile .stat-label{font-size:10.5px;color:var(--muted-foreground);font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.stat-tile .stat-value{font-size:18px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+.frete-opt{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;
+  border:1px solid var(--border);border-radius:10px;margin-bottom:6px;font-size:13.5px
+}
+.frete-opt b{font-variant-numeric:tabular-nums}
 
 /* ---------- misc ---------- */
 .status{
@@ -359,7 +367,7 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
 
 <div class="tabs" role="tablist">
   <button class="tab" role="tab" id="tab-new" aria-selected="true">Criar anúncio</button>
-  <button class="tab" role="tab" id="tab-saved" aria-selected="false">Salvos <span class="cnt" id="cnt">0</span></button>
+  <button class="tab" role="tab" id="tab-saved" aria-selected="false">Anúncios Salvos <span class="cnt" id="cnt">0</span></button>
 </div>
 
 <div class="wrap">
@@ -473,16 +481,103 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
   </div>
 
   <div id="view-saved" class="hide">
-    <div class="row" style="margin-bottom:10px">
-      <input id="q" placeholder="Buscar por nome ou código" style="max-width:320px">
-      <button class="btn ghost sm" id="btn-reload">Atualizar</button>
+    <div class="panel" style="margin-bottom:16px">
+      <h2><span class="ico-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>Calculadora de frete (SuperFrete)</h2>
+      <div class="row">
+        <input id="frete-cep" placeholder="CEP de destino" style="max-width:180px" inputmode="numeric" maxlength="9">
+        <button class="btn ghost sm" id="btn-frete-calcular">Calcular</button>
+        <span class="hint" style="margin:0">Origem fixa: Joinville/SC 89201-405 · pacote padrão de 1 carta em sleeve</span>
+      </div>
+      <div id="frete-resultado" style="margin-top:10px"></div>
     </div>
-    <div class="hint" id="saved-summary" style="margin-bottom:12px"></div>
-    <div class="saved-list" id="saved"></div>
-    <div class="empty hide" id="saved-empty">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l3-4h12l3 4M3 7v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7M3 7h18M9 11a3 3 0 0 0 6 0"/></svg>
-      <p>Nenhum anúncio salvo ainda.</p>
-      <span>Os anúncios que você salvar ficam no Postgres, na tabela <span class="mono">anuncio</span>.</span>
+
+    <div class="seg" id="seg-salvos" style="margin-bottom:14px">
+      <button data-sub="anuncios" aria-pressed="true">Anúncios</button>
+      <button data-sub="vendidos" aria-pressed="false">Vendidos <span class="cnt" id="cnt-vendidos">0</span></button>
+    </div>
+
+    <div id="sub-anuncios">
+      <div class="row" style="margin-bottom:10px">
+        <input id="q" placeholder="Buscar por nome ou código" style="max-width:320px">
+        <button class="btn ghost sm" id="btn-reload">Atualizar</button>
+      </div>
+      <div class="hint" id="saved-summary" style="margin-bottom:12px"></div>
+      <div class="saved-list" id="saved"></div>
+      <div class="empty hide" id="saved-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l3-4h12l3 4M3 7v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7M3 7h18M9 11a3 3 0 0 0 6 0"/></svg>
+        <p>Nenhum anúncio salvo ainda.</p>
+        <span>Os anúncios que você salvar ficam no Postgres, na tabela <span class="mono">anuncio</span>.</span>
+      </div>
+    </div>
+
+    <div id="sub-vendidos" class="hide">
+      <div class="row" style="justify-content:space-between;margin-bottom:14px;flex-wrap:wrap">
+        <div class="row" id="venda-indicadores"></div>
+        <button class="btn" id="btn-venda-externa">+ Registrar venda externa</button>
+      </div>
+      <div class="panel hide" id="venda-chart-wrap" style="margin-bottom:16px"></div>
+      <div class="saved-list" id="vendas-list"></div>
+      <div class="empty hide" id="vendas-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
+        <p>Nenhuma venda registrada ainda.</p>
+        <span>Marque um anúncio como "Vendida" na aba Anúncios, ou registre uma venda externa aqui.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="editor-overlay hide" id="venda-overlay">
+  <div class="editor-panel" style="max-width:540px">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span id="venda-titulo">Registrar venda</span></h3>
+    <div>
+      <label>Onde foi vendido?</label>
+      <select id="v-origem">
+        <option value="whatsapp_grupo">Grupo de WhatsApp</option>
+        <option value="anuncio">Anúncio gerado aqui</option>
+        <option value="outro">Outro</option>
+      </select>
+      <div id="v-grupo-wrap" style="margin-top:10px">
+        <label>Qual grupo?</label>
+        <input id="v-grupo" placeholder="Nome do grupo de WhatsApp">
+      </div>
+      <label style="margin-top:10px">Pra quem?</label>
+      <input id="v-comprador" placeholder="Nome do comprador">
+
+      <label style="margin-top:14px">Cartas vendidas</label>
+      <div id="v-cartas"></div>
+      <button class="btn ghost sm" id="v-add-carta" style="margin-top:6px">+ Adicionar carta</button>
+
+      <div class="fields" style="margin-top:14px">
+        <div><label>Frete cobrado (opcional)</label><input id="v-frete-valor" placeholder="0,00"></div>
+        <div><label>Serviço de frete</label>
+          <select id="v-frete-servico">
+            <option value="">—</option>
+            <option>PAC</option><option>SEDEX</option><option>Mini Envios</option>
+            <option>Jadlog</option><option>Loggi</option><option>J&T</option>
+          </select>
+        </div>
+      </div>
+
+      <details style="margin-top:14px">
+        <summary style="cursor:pointer;color:var(--muted-foreground);font-size:13px;font-weight:700">Endereço completo (pra gerar etiqueta depois)</summary>
+        <div class="fields" style="margin-top:10px">
+          <div><label>Nome do destinatário</label><input id="v-end-nome"></div>
+          <div><label>CPF</label><input id="v-end-cpf" inputmode="numeric"></div>
+          <div><label>CEP</label><input id="v-end-cep" inputmode="numeric" maxlength="9"></div>
+          <div><label>Telefone</label><input id="v-end-telefone" inputmode="numeric"></div>
+          <div><label>Rua</label><input id="v-end-rua"></div>
+          <div><label>Número</label><input id="v-end-numero"></div>
+          <div><label>Complemento</label><input id="v-end-complemento"></div>
+          <div><label>Bairro</label><input id="v-end-bairro"></div>
+          <div><label>Cidade</label><input id="v-end-cidade"></div>
+          <div><label>UF</label><input id="v-end-uf" maxlength="2" style="text-transform:uppercase"></div>
+          <div><label>E-mail (opcional)</label><input id="v-end-email"></div>
+        </div>
+      </details>
+    </div>
+    <div class="editor-actions">
+      <button class="btn ghost sm" id="v-cancel">Cancelar</button>
+      <button class="btn" id="v-salvar">Salvar venda</button>
     </div>
   </div>
 </div>
@@ -554,7 +649,9 @@ const FRASES_PADRAO=[
   'Aceito pagamento com cartão de crédito, consulte taxas.'
 ];
 
-let photos=[], cards=[], gen=null, mode='curto', saved=[], editandoId=null, vendidosTotal=0;
+let photos=[], cards=[], gen=null, mode='curto', saved=[], editandoId=null;
+let vendas=[], vendaIndicadores=null, vendaEditId=null, vendaCartasTmp=[], freteOpcoes=[];
+const ORIGEM_LABEL={anuncio:'Anúncio', whatsapp_grupo:'Grupo WhatsApp', outro:'Outro'};
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
 const ICO_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
@@ -949,30 +1046,28 @@ async function carregarParaEditar(id){
 async function carregar(){
   try{
     const d=await api('/api/anuncios?q='+encodeURIComponent($('#q').value.trim()));
-    saved=d.anuncios||[];vendidosTotal=d.vendidos||0;$('#cnt').textContent=saved.length;renderSaved();
+    saved=d.anuncios||[];$('#cnt').textContent=saved.length;renderSaved();
   }catch(e){$('#saved').innerHTML='';showErr('Não consegui listar: '+e.message);}
 }
 function renderSaved(){
-  $('#saved-empty').classList.toggle('hide',saved.length>0);
-  $('#saved-summary').textContent=saved.length
-    ?`${vendidosTotal} vendida${vendidosTotal===1?'':'s'} de ${saved.length} anúncio${saved.length===1?'':'s'} carregado${saved.length===1?'':'s'}`
-    :'';
-  $('#saved').innerHTML=saved.map(a=>{
+  const ativos=saved.filter(a=>a.status!=='vendida');
+  $('#saved-empty').classList.toggle('hide',ativos.length>0);
+  $('#saved-summary').textContent=ativos.length?`${ativos.length} anúncio${ativos.length===1?'':'s'} ativo${ativos.length===1?'':'s'}`:'';
+  $('#saved').innerHTML=ativos.map(a=>{
     const cs=(a.cards||[]),nome=cs.map(c=>c.name).filter(Boolean).join(' + ')||a.titulo||'Sem nome';
     const cod=cs.map(c=>(c.code||'')+(c.variant?'-'+c.variant:'')).filter(Boolean).join(', ');
     const accent=(cs[0]&&cs[0].colors&&cs[0].colors[0]&&COLORS[cs[0].colors[0]])||'var(--primary)';
-    const vendida=a.status==='vendida';
     const thumb=a.capa?`<img class="sv-thumb" src="${a.capa}" alt="">`
       :`<div class="sv-thumb" style="display:flex;align-items:center;justify-content:center">${ICO_CARD}</div>`;
-    return `<div class="sv-row ${vendida?'is-sold':''}" style="--accent:${accent}">
+    return `<div class="sv-row" style="--accent:${accent}">
       ${thumb}
       <div class="sv-info">
-        <div class="sv-name">${esc(nome)}${vendida?' <span class="chip ok">Vendida</span>':''}</div>
+        <div class="sv-name">${esc(nome)}</div>
         <div class="sv-meta mono">${esc(cod)} · ${brl(a.total)} · ${new Date(a.criado_em).toLocaleDateString('pt-BR')}</div>
       </div>
       <div class="sv-actions">
         <button class="btn ghost sm" data-edit-ad="${a.id}">Editar</button>
-        <button class="btn ghost sm" data-vender="${a.id}" data-atual="${a.status||''}">${vendida?'Desfazer venda':'Vendida'}</button>
+        <button class="btn ghost sm" data-vender="${a.id}">Vendida</button>
         <button class="btn danger sm" data-del="${a.id}">Excluir</button>
       </div>
     </div>`;}).join('');
@@ -1390,17 +1485,234 @@ $('#saved').addEventListener('click',async e=>{
     catch(err){showErr('Não consegui excluir: '+err.message);}}}
   if(ed)carregarParaEditar(+ed.dataset.editAd);
   if(v){
-    const marcando=v.dataset.atual!=='vendida';
-    if(marcando&&!confirm('Marcar esta carta como vendida?'))return;
+    if(!confirm('Marcar esta carta como vendida? Ela vai pra aba Vendidos.'))return;
     try{
-      const r=await api('/api/anuncios/'+v.dataset.vender+'/vender',{method:'POST'});
-      toast(r.status==='vendida'?'Marcada como vendida':'Venda desfeita');
+      await api('/api/anuncios/'+v.dataset.vender+'/vender',{method:'POST'});
+      toast('Marcada como vendida — veja na aba Vendidos');
       carregar();
     }catch(err){showErr('Não consegui atualizar: '+err.message);}
   }
 });
 $('#q').oninput=()=>{clearTimeout(tmr);tmr=setTimeout(carregar,350);};
 $('#btn-reload').onclick=carregar;
+
+/* ---------- sub-abas Anúncios / Vendidos ---------- */
+$('#seg-salvos').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-sub]');
+  if(!b)return;
+  const sub=b.dataset.sub;
+  $$('#seg-salvos button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.sub===sub)));
+  $('#sub-anuncios').classList.toggle('hide',sub!=='anuncios');
+  $('#sub-vendidos').classList.toggle('hide',sub!=='vendidos');
+  if(sub==='vendidos')carregarVendas();
+});
+
+/* ---------- calculadora de frete (SuperFrete) ---------- */
+$('#btn-frete-calcular').onclick=async()=>{
+  const cep=$('#frete-cep').value.replace(/\D/g,'');
+  if(cep.length!==8){showErr('CEP inválido — precisa ter 8 dígitos');return;}
+  clearErr();
+  $('#btn-frete-calcular').disabled=true;
+  $('#frete-resultado').innerHTML='<div class="status"><svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a10 10 0 1 0 10 10"/></svg><span>Calculando…</span></div>';
+  try{
+    const d=await api('/api/frete/calcular',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cep})});
+    freteOpcoes=d.opcoes||[];
+    if(!freteOpcoes.length){$('#frete-resultado').innerHTML='<div class="hint">Nenhuma opção de frete encontrada pra esse CEP.</div>';return;}
+    $('#frete-resultado').innerHTML=freteOpcoes.map(o=>{
+      const empresa=o.company&&o.company.name?` <span style="opacity:.6">(${esc(o.company.name)})</span>`:'';
+      const prazo=(o.delivery_range&&o.delivery_range.max)||o.delivery_time;
+      return `<div class="frete-opt"><span>${esc(o.name)}${empresa} — até ${prazo} dia(s) útil(eis)</span><b>${brl(o.price)}</b></div>`;
+    }).join('')+`<button class="btn ghost sm" id="btn-copiar-orcamento" style="margin-top:6px">Copiar orçamento pro WhatsApp</button>`;
+    $('#btn-copiar-orcamento').onclick=async()=>{
+      const linhas=freteOpcoes.map(o=>`• ${o.name}: ${brl(o.price)} (até ${(o.delivery_range&&o.delivery_range.max)||o.delivery_time} dia(s) útil(eis))`).join('\n');
+      const texto=`📦 Orçamento de frete pro CEP ${cep.slice(0,5)}-${cep.slice(5)}:\n${linhas}`;
+      try{await navigator.clipboard.writeText(texto);toast('Orçamento copiado');}
+      catch(e){showErr('Cópia bloqueada pelo navegador.');}
+    };
+  }catch(e){
+    showErr('Não consegui calcular o frete: '+e.message);
+    $('#frete-resultado').innerHTML='';
+  }finally{
+    $('#btn-frete-calcular').disabled=false;
+  }
+};
+
+/* ---------- aba Vendidos ---------- */
+async function carregarVendas(){
+  try{
+    const d=await api('/api/vendas');
+    vendas=d.vendas||[];
+    vendaIndicadores=d.indicadores||null;
+    $('#cnt-vendidos').textContent=vendas.length;
+    renderVendaIndicadores();
+    renderVendaChart();
+    renderVendasList();
+  }catch(e){
+    $('#vendas-list').innerHTML='';
+    showErr('Não consegui listar vendas: '+e.message);
+  }
+}
+function renderVendaIndicadores(){
+  const ind=vendaIndicadores||{total_vendas:0,receita_total:0,ticket_medio:0,por_origem:[]};
+  const chips=(ind.por_origem||[]).map(o=>`<span class="chip">${esc(ORIGEM_LABEL[o.origem]||o.origem)}: ${o.quantidade} · ${brl(o.receita)}</span>`).join(' ');
+  $('#venda-indicadores').innerHTML=`
+    <div class="stat-tile"><div class="stat-label">Receita total</div><div class="stat-value">${brl(ind.receita_total)}</div></div>
+    <div class="stat-tile"><div class="stat-label">Vendas</div><div class="stat-value">${ind.total_vendas}</div></div>
+    <div class="stat-tile"><div class="stat-label">Ticket médio</div><div class="stat-value">${brl(ind.ticket_medio)}</div></div>
+    ${chips?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${chips}</div>`:''}`;
+}
+function renderVendaChart(){
+  const wrap=$('#venda-chart-wrap');
+  if(!vendas.length){wrap.classList.add('hide');wrap.innerHTML='';return;}
+  wrap.classList.remove('hide');
+  const porDia={};
+  vendas.forEach(v=>{
+    const dia=(v.criado_em||'').slice(0,10);
+    porDia[dia]=(porDia[dia]||0)+Number(v.preco_total||0);
+  });
+  const dias=Object.keys(porDia).sort();
+  const max=Math.max(...dias.map(d=>porDia[d]),1);
+  const w=600,h=170,padL=52,padR=12,padT=12,padB=22;
+  const plotW=w-padL-padR,plotH=h-padT-padB;
+  const slot=plotW/dias.length;
+  const barW=Math.min(28,slot*.6);
+  const bars=dias.map((d,i)=>{
+    const x=padL+(i+0.5)*slot-barW/2;
+    const bh=(porDia[d]/max)*plotH;
+    const y=padT+plotH-bh;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(bh,1).toFixed(1)}" rx="3" fill="var(--primary)"/>`;
+  }).join('');
+  const passo=Math.max(1,Math.ceil(dias.length/8));
+  const labels=dias.map((d,i)=>{
+    if(i%passo!==0)return '';
+    const x=padL+(i+0.5)*slot;
+    return `<text x="${x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="var(--muted-foreground)">${d.slice(5)}</text>`;
+  }).join('');
+  wrap.innerHTML=`<div class="hint" style="margin-bottom:6px;font-weight:700">Receita por dia</div>
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">${bars}${labels}</svg>`;
+}
+function renderVendasList(){
+  $('#vendas-empty').classList.toggle('hide',vendas.length>0);
+  $('#vendas-list').innerHTML=vendas.map(v=>{
+    const cs=v.cards||[];
+    const nome=cs.map(c=>c.nome||c.name).filter(Boolean).join(' + ')||'Venda sem carta especificada';
+    const origemTxt=(v.origem==='whatsapp_grupo'&&v.origem_detalhe)?`Grupo: ${esc(v.origem_detalhe)}`:(ORIGEM_LABEL[v.origem]||v.origem);
+    const temEndereco=!!(v.endereco&&v.endereco.cep);
+    const etiquetaBtn=v.etiqueta_url
+      ?`<a class="btn ghost sm" href="${v.etiqueta_url}" target="_blank" rel="noopener">Ver etiqueta</a>`
+      :`<button class="btn ghost sm" data-etiqueta="${v.id}" ${temEndereco?'':'disabled title="Preencha o endereço completo em Editar"'}>Gerar etiqueta</button>`;
+    return `<div class="sv-row">
+      <div class="sv-thumb" style="display:flex;align-items:center;justify-content:center">${ICO_CARD}</div>
+      <div class="sv-info">
+        <div class="sv-name">${esc(nome)}</div>
+        <div class="sv-meta mono">${esc(origemTxt)}${v.comprador?' · '+esc(v.comprador):''} · ${brl(v.preco_total)} · ${new Date(v.criado_em).toLocaleDateString('pt-BR')}</div>
+      </div>
+      <div class="sv-actions">
+        <button class="btn ghost sm" data-editar-venda="${v.id}">Editar</button>
+        ${etiquetaBtn}
+        <button class="btn danger sm" data-excluir-venda="${v.id}">Excluir</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+$('#vendas-list').addEventListener('click',async e=>{
+  const ed=e.target.closest('button[data-editar-venda]');
+  const del=e.target.closest('button[data-excluir-venda]');
+  const et=e.target.closest('button[data-etiqueta]');
+  if(ed){const v=vendas.find(x=>String(x.id)===ed.dataset.editarVenda);if(v)abrirVendaModal(v);}
+  if(del){if(confirm('Excluir este registro de venda? Se ela veio de um anúncio marcado como vendida, o anúncio volta pra aba Anúncios. Não dá pra desfazer.')){
+    try{await api('/api/vendas/'+del.dataset.excluirVenda,{method:'DELETE'});toast('Excluído');carregarVendas();carregar();}
+    catch(err){showErr('Não consegui excluir: '+err.message);}}}
+  if(et){
+    if(!confirm('Isso vai GERAR E PAGAR uma etiqueta de verdade, usando o saldo da sua conta SuperFrete. Confirma?'))return;
+    et.disabled=true;const orig=et.textContent;et.textContent='Gerando…';
+    try{
+      const r=await api('/api/vendas/'+et.dataset.etiqueta+'/etiqueta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmar:true})});
+      toast('Etiqueta gerada — rastreio '+(r.rastreio||'—'));
+      carregarVendas();
+    }catch(err){showErr('Não consegui gerar a etiqueta: '+err.message);et.disabled=false;et.textContent=orig;}
+  }
+});
+
+/* ---------- modal registrar/editar venda ---------- */
+function vendaCartaRowHTML(c,i){
+  return `<div class="fields" data-carta-row="${i}" style="margin-bottom:8px">
+    <div><label>Nome</label><input data-vc="nome" value="${esc(c.nome||'')}"></div>
+    <div><label>Código</label><input class="mono" data-vc="codigo" value="${esc(c.codigo||'')}"></div>
+    <div><label>Preço (R$)</label><input data-vc="preco" value="${c.preco??''}"></div>
+    <div><label>Qtd</label><input type="number" min="1" data-vc="quantidade" value="${c.quantidade||1}"></div>
+  </div>${vendaCartasTmp.length>1?`<button class="btn danger sm" data-rm-carta="${i}" style="margin-bottom:10px">Remover carta</button>`:''}`;
+}
+function renderVendaCartas(){
+  $('#v-cartas').innerHTML=vendaCartasTmp.map((c,i)=>vendaCartaRowHTML(c,i)).join('');
+}
+$('#v-cartas').addEventListener('input',e=>{
+  const row=e.target.closest('[data-carta-row]');
+  if(!row||!e.target.dataset.vc)return;
+  vendaCartasTmp[+row.dataset.cartaRow][e.target.dataset.vc]=e.target.value;
+});
+$('#v-cartas').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-rm-carta]');
+  if(!b)return;
+  vendaCartasTmp.splice(+b.dataset.rmCarta,1);
+  renderVendaCartas();
+});
+$('#v-add-carta').onclick=()=>{vendaCartasTmp.push({nome:'',codigo:'',preco:'',quantidade:1});renderVendaCartas();};
+$('#v-origem').addEventListener('change',()=>{
+  $('#v-grupo-wrap').classList.toggle('hide',$('#v-origem').value!=='whatsapp_grupo');
+});
+function abrirVendaModal(venda){
+  vendaEditId=venda?venda.id:null;
+  $('#venda-titulo').textContent=venda?'Editar venda':'Registrar venda externa';
+  $('#v-origem').value=(venda&&venda.origem)||'whatsapp_grupo';
+  $('#v-grupo-wrap').classList.toggle('hide',$('#v-origem').value!=='whatsapp_grupo');
+  $('#v-grupo').value=(venda&&venda.origem_detalhe)||'';
+  $('#v-comprador').value=(venda&&venda.comprador)||'';
+  vendaCartasTmp=(venda&&venda.cards&&venda.cards.length)?venda.cards.map(c=>Object.assign({},c)):[{nome:'',codigo:'',preco:'',quantidade:1}];
+  renderVendaCartas();
+  $('#v-frete-valor').value=(venda&&venda.frete_valor!=null)?venda.frete_valor:'';
+  $('#v-frete-servico').value=(venda&&venda.frete_servico)||'';
+  const end=(venda&&venda.endereco)||{};
+  $('#v-end-nome').value=end.nome||'';$('#v-end-cpf').value=end.cpf||'';$('#v-end-cep').value=end.cep||'';
+  $('#v-end-telefone').value=end.telefone||'';$('#v-end-rua').value=end.rua||'';$('#v-end-numero').value=end.numero||'';
+  $('#v-end-complemento').value=end.complemento||'';$('#v-end-bairro').value=end.bairro||'';
+  $('#v-end-cidade').value=end.cidade||'';$('#v-end-uf').value=end.uf||'';$('#v-end-email').value=end.email||'';
+  $('#venda-overlay').classList.remove('hide');
+}
+$('#btn-venda-externa').onclick=()=>abrirVendaModal(null);
+$('#v-cancel').onclick=()=>$('#venda-overlay').classList.add('hide');
+$('#v-salvar').onclick=async()=>{
+  const cartas=vendaCartasTmp.filter(c=>c.nome||c.codigo).map(c=>({
+    nome:c.nome,codigo:c.codigo,preco:Number(String(c.preco).replace(',','.'))||0,quantidade:Number(c.quantidade)||1
+  }));
+  const endereco={
+    nome:$('#v-end-nome').value.trim(),cpf:$('#v-end-cpf').value.replace(/\D/g,''),cep:$('#v-end-cep').value.replace(/\D/g,''),
+    telefone:$('#v-end-telefone').value.replace(/\D/g,''),rua:$('#v-end-rua').value.trim(),numero:$('#v-end-numero').value.trim(),
+    complemento:$('#v-end-complemento').value.trim(),bairro:$('#v-end-bairro').value.trim(),cidade:$('#v-end-cidade').value.trim(),
+    uf:$('#v-end-uf').value.trim().toUpperCase(),email:$('#v-end-email').value.trim(),
+  };
+  const temEndereco=Object.values(endereco).some(v=>v);
+  const payload={
+    origem:$('#v-origem').value,
+    origem_detalhe:$('#v-origem').value==='whatsapp_grupo'?$('#v-grupo').value.trim():null,
+    comprador:$('#v-comprador').value.trim(),
+    cards:cartas,
+    frete_valor:$('#v-frete-valor').value?Number($('#v-frete-valor').value.replace(',','.')):null,
+    frete_servico:$('#v-frete-servico').value||null,
+    endereco:temEndereco?endereco:null,
+  };
+  try{
+    if(vendaEditId){
+      await api('/api/vendas/'+vendaEditId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      toast('Venda atualizada');
+    }else{
+      await api('/api/vendas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      toast('Venda registrada');
+    }
+    $('#venda-overlay').classList.add('hide');
+    carregarVendas();
+  }catch(e){showErr('Não consegui salvar a venda: '+e.message);}
+};
 $('#tab-new').onclick=()=>tab('new');
 $('#tab-saved').onclick=()=>{tab('saved');carregar();};
 function tab(t){

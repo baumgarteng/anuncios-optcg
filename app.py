@@ -3,6 +3,7 @@ import psycopg
 from psycopg.rows import dict_row
 import urllib.request
 import urllib.parse
+import urllib.error
 import numpy as np
 import cv2
 from flask import Flask, request, jsonify, render_template
@@ -11,6 +12,44 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 OPTCG_LIVE_URL = os.environ.get("OPTCG_LIVE_URL", "https://optcg-cloud-v2.onrender.com")
+SUPERFRETE_TOKEN = os.environ.get("SUPERFRETE_TOKEN", "")
+SUPERFRETE_BASE = os.environ.get("SUPERFRETE_BASE", "https://api.superfrete.com")
+
+# endereço fixo de origem (remetente) — sempre o mesmo, informado pelo usuário
+ORIGEM_ENDERECO = {
+    "name": "Gustavo Baumgarten", "address": "Rua Henrique Meyer", "number": "184",
+    "complement": "ap 1208", "district": "Centro", "city": "Joinville",
+    "state_abbr": "SC", "postal_code": "89201405",
+}
+ORIGEM_CEP = "89201405"
+# dimensões/peso padrão pra 1 carta em sleeve + toploader dentro de um
+# envelope rígido pequeno — ajustável por requisição quando precisar.
+PACOTE_PADRAO = {"height": 2, "width": 12, "length": 17, "weight": 0.08}
+SUPERFRETE_SERVICOS = {"PAC": 1, "SEDEX": 2, "Mini Envios": 17, "Jadlog": 3, "Loggi": 31, "J&T": 33}
+
+
+def _superfrete(path, body):
+    """POST autenticado na API da SuperFrete (produção). Nunca chamamos
+    /cart ou /checkout sem confirmação explícita do usuário — checkout gasta
+    saldo real da carteira dele."""
+    if not SUPERFRETE_TOKEN:
+        raise RuntimeError("SUPERFRETE_TOKEN não configurado")
+    req = urllib.request.Request(
+        SUPERFRETE_BASE.rstrip("/") + path,
+        data=json.dumps(body).encode(),
+        headers={
+            "Authorization": "Bearer " + SUPERFRETE_TOKEN,
+            "User-Agent": "AnunciosOPTCG/1.0 (gustavo.baumgarten@gmail.com)",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        detalhe = e.read().decode(errors="replace")
+        raise RuntimeError(f"SuperFrete {e.code}: {detalhe[:300]}")
 
 app = Flask(__name__)
 
@@ -43,6 +82,25 @@ CREATE TABLE IF NOT EXISTS anuncio_imagem (
 );
 CREATE INDEX IF NOT EXISTS anuncio_criado_idx ON anuncio (criado_em DESC);
 CREATE INDEX IF NOT EXISTS anuncio_imagem_anuncio_idx ON anuncio_imagem (anuncio_id);
+CREATE TABLE IF NOT EXISTS venda (
+  id                bigserial PRIMARY KEY,
+  anuncio_id        bigint REFERENCES anuncio(id) ON DELETE SET NULL,
+  criado_em         timestamptz NOT NULL DEFAULT now(),
+  origem            text NOT NULL DEFAULT 'outro',
+  origem_detalhe    text,
+  comprador         text,
+  cards             jsonb NOT NULL DEFAULT '[]'::jsonb,
+  preco_total       numeric(10,2),
+  endereco          jsonb,
+  frete_servico     text,
+  frete_valor       numeric(10,2),
+  frete_order_id    text,
+  etiqueta_url      text,
+  etiqueta_rastreio text,
+  etiqueta_status   text
+);
+CREATE INDEX IF NOT EXISTS venda_criado_idx ON venda (criado_em DESC);
+CREATE INDEX IF NOT EXISTS venda_anuncio_idx ON venda (anuncio_id);
 """
 
 
@@ -716,28 +774,247 @@ def api_excluir(aid):
 
 @app.post("/api/anuncios/<int:aid>/vender")
 def api_marcar_vendida(aid):
-    """Alterna entre vendida/publicado — confirma a venda de um anúncio já
-    salvo, ou desfaz se clicado de novo. vendido_em guarda quando a venda foi
-    confirmada, usado pra contar vendas (não precisa de tabela separada, dá
-    pra contar direto pelo status)."""
+    """Alterna entre vendida/publicado. Marcar cria uma linha em venda
+    (origem='anuncio', com snapshot das cartas/preço) — é essa linha que
+    aparece na aba Vendidos. Desfazer apaga a venda ligada a esse anúncio
+    (ela ainda não tinha dado real de comprador/frete preenchido nesse
+    ponto; se já tinha, o usuário perde e tem que recriar — aceitável pro
+    tamanho desse app)."""
     try:
         with conn() as c, c.cursor() as cur:
-            cur.execute("SELECT status FROM anuncio WHERE id = %s", (aid,))
+            cur.execute("SELECT status, cards, total FROM anuncio WHERE id = %s", (aid,))
             row = cur.fetchone()
             if not row:
                 return jsonify(erro="anúncio não encontrado"), 404
             if row["status"] == "vendida":
                 cur.execute(
                     "UPDATE anuncio SET status='publicado', vendido_em=NULL WHERE id=%s", (aid,))
+                cur.execute("DELETE FROM venda WHERE anuncio_id=%s", (aid,))
                 novo_status = "publicado"
             else:
                 cur.execute(
                     "UPDATE anuncio SET status='vendida', vendido_em=now() WHERE id=%s", (aid,))
+                cur.execute(
+                    """INSERT INTO venda (anuncio_id, origem, cards, preco_total)
+                       VALUES (%s,'anuncio',%s,%s)""",
+                    (aid, json.dumps(row["cards"], ensure_ascii=False), row["total"]))
                 novo_status = "vendida"
             c.commit()
         return jsonify(id=aid, status=novo_status)
     except Exception as e:
         return jsonify(erro=str(e)), 500
+
+
+# ---------------------------------------------------------------- vendas
+@app.post("/api/frete/calcular")
+def api_frete_calcular():
+    body = request.json or {}
+    cep = re.sub(r"\D", "", body.get("cep") or "")
+    if len(cep) != 8:
+        return jsonify(erro="CEP inválido — precisa ter 8 dígitos"), 400
+    pacote = {
+        "height": float(body.get("altura") or PACOTE_PADRAO["height"]),
+        "width": float(body.get("largura") or PACOTE_PADRAO["width"]),
+        "length": float(body.get("comprimento") or PACOTE_PADRAO["length"]),
+        "weight": float(body.get("peso") or PACOTE_PADRAO["weight"]),
+    }
+    try:
+        resultado = _superfrete("/api/v0/calculator", {
+            "from": {"postal_code": ORIGEM_CEP},
+            "to": {"postal_code": cep},
+            "services": "1,2,17,3,31,33",
+            "package": pacote,
+            "options": {"own_hand": False, "receipt": False, "insurance_value": 0,
+                        "use_insurance_value": False},
+        })
+    except Exception as e:
+        return jsonify(erro=f"falha ao calcular frete: {e}"), 502
+    opcoes = [o for o in resultado if not o.get("has_error")] if isinstance(resultado, list) else []
+    return jsonify(opcoes=opcoes, cep=cep)
+
+
+@app.get("/api/vendas")
+def api_vendas_listar():
+    q = (request.args.get("q") or "").strip()
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute(
+                """SELECT v.* FROM venda v
+                    WHERE %s = '' OR v.cards::text ILIKE '%%'||%s||'%%'
+                       OR v.comprador ILIKE '%%'||%s||'%%'
+                    ORDER BY v.criado_em DESC LIMIT 300""", (q, q, q))
+            vendas = cur.fetchall()
+            cur.execute("SELECT count(*) n, COALESCE(sum(preco_total),0) receita FROM venda")
+            tot = cur.fetchone()
+            cur.execute(
+                """SELECT COALESCE(origem,'outro') o, count(*) n, COALESCE(sum(preco_total),0) receita
+                     FROM venda GROUP BY o ORDER BY n DESC""")
+            por_origem = cur.fetchall()
+        for v in vendas:
+            v["criado_em"] = v["criado_em"].isoformat()
+            v["preco_total"] = float(v["preco_total"] or 0)
+            v["frete_valor"] = float(v["frete_valor"]) if v["frete_valor"] is not None else None
+        indicadores = {
+            "total_vendas": tot["n"],
+            "receita_total": float(tot["receita"] or 0),
+            "ticket_medio": (float(tot["receita"]) / tot["n"]) if tot["n"] else 0,
+            "por_origem": [{"origem": o["o"], "quantidade": o["n"], "receita": float(o["receita"] or 0)}
+                           for o in por_origem],
+        }
+        return jsonify(vendas=vendas, indicadores=indicadores)
+    except Exception as e:
+        return jsonify(erro=str(e)), 500
+
+
+@app.post("/api/vendas")
+def api_vendas_criar():
+    b = request.json or {}
+    cards = b.get("cards") or []
+    preco = float(b["preco_total"]) if b.get("preco_total") not in (None, "") else \
+        sum(float(c.get("preco") or 0) * int(c.get("quantidade") or 1) for c in cards)
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute(
+                """INSERT INTO venda (origem, origem_detalhe, comprador, cards, preco_total,
+                                       frete_servico, frete_valor)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (b.get("origem") or "outro", b.get("origem_detalhe"), b.get("comprador"),
+                 json.dumps(cards, ensure_ascii=False), preco,
+                 b.get("frete_servico"), b.get("frete_valor")))
+            vid = cur.fetchone()["id"]
+            c.commit()
+        return jsonify(id=vid)
+    except Exception as e:
+        return jsonify(erro=str(e)), 500
+
+
+@app.put("/api/vendas/<int:vid>")
+def api_vendas_atualizar(vid):
+    b = request.json or {}
+    campos, valores = [], []
+    for campo in ("origem", "origem_detalhe", "comprador", "frete_servico"):
+        if campo in b:
+            campos.append(f"{campo}=%s")
+            valores.append(b[campo])
+    if "cards" in b:
+        campos.append("cards=%s")
+        valores.append(json.dumps(b["cards"], ensure_ascii=False))
+    if "preco_total" in b:
+        campos.append("preco_total=%s")
+        valores.append(b["preco_total"])
+    if "frete_valor" in b:
+        campos.append("frete_valor=%s")
+        valores.append(b["frete_valor"])
+    if "endereco" in b:
+        campos.append("endereco=%s")
+        valores.append(json.dumps(b["endereco"], ensure_ascii=False) if b["endereco"] else None)
+    if not campos:
+        return jsonify(erro="nada pra atualizar"), 400
+    valores.append(vid)
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute(f"UPDATE venda SET {', '.join(campos)} WHERE id=%s", valores)
+            if cur.rowcount == 0:
+                return jsonify(erro="venda não encontrada"), 404
+            c.commit()
+        return jsonify(id=vid)
+    except Exception as e:
+        return jsonify(erro=str(e)), 500
+
+
+@app.delete("/api/vendas/<int:vid>")
+def api_vendas_excluir(vid):
+    """Excluir uma venda também desfaz a marca de vendida no anúncio de
+    origem (quando existe) — sem isso o anúncio ficaria com status='vendida'
+    escondido da aba Anúncios sem nenhuma venda que o explique."""
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute("SELECT anuncio_id FROM venda WHERE id = %s", (vid,))
+            row = cur.fetchone()
+            cur.execute("DELETE FROM venda WHERE id = %s", (vid,))
+            if row and row["anuncio_id"]:
+                cur.execute(
+                    "UPDATE anuncio SET status='publicado', vendido_em=NULL WHERE id=%s",
+                    (row["anuncio_id"],))
+            c.commit()
+        return jsonify(ok=True)
+    except Exception as e:
+        return jsonify(erro=str(e)), 500
+
+
+@app.post("/api/vendas/<int:vid>/etiqueta")
+def api_vendas_etiqueta(vid):
+    """Fluxo completo de etiqueta: cria o pedido na SuperFrete (/cart), paga
+    com o saldo da carteira (/checkout) e grava o link do PDF + rastreio.
+    Gasta saldo real — só roda com confirmar:true explícito no corpo, além
+    da confirmação que o front já pede antes de chamar isso."""
+    b = request.json or {}
+    if not b.get("confirmar"):
+        return jsonify(erro="confirmação obrigatória — isso gera e paga uma etiqueta de verdade"), 400
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute("SELECT * FROM venda WHERE id = %s", (vid,))
+            venda = cur.fetchone()
+        if not venda:
+            return jsonify(erro="venda não encontrada"), 404
+        endereco = venda.get("endereco") or {}
+        if not endereco.get("cep"):
+            return jsonify(erro="preencha o endereço completo do comprador antes de gerar a etiqueta"), 400
+
+        servico_id = SUPERFRETE_SERVICOS.get(venda.get("frete_servico"), 1)
+        cards = venda.get("cards") or []
+        produtos = [{"name": (c.get("nome") or c.get("name") or "Carta OPTCG"),
+                     "quantity": int(c.get("quantidade") or 1),
+                     "unitary_value": float(c.get("preco") or 0)} for c in cards] or \
+                   [{"name": "Carta OPTCG", "quantity": 1, "unitary_value": float(venda.get("preco_total") or 0)}]
+
+        pedido = _superfrete("/api/v0/cart", {
+            "from": ORIGEM_ENDERECO,
+            "to": {
+                "name": endereco.get("nome") or venda.get("comprador") or "Comprador",
+                "address": endereco.get("rua") or "",
+                "number": endereco.get("numero") or "",
+                "complement": endereco.get("complemento") or "",
+                "district": endereco.get("bairro") or "",
+                "city": endereco.get("cidade") or "",
+                "state_abbr": (endereco.get("uf") or "").upper(),
+                "postal_code": re.sub(r"\D", "", endereco.get("cep") or ""),
+                "document": re.sub(r"\D", "", endereco.get("cpf") or "") or None,
+                "phone": re.sub(r"\D", "", endereco.get("telefone") or "") or None,
+                "email": endereco.get("email") or None,
+            },
+            "service": servico_id,
+            "products": produtos,
+            "volumes": PACOTE_PADRAO,
+            "options": {"non_commercial": True},
+            "platform": "AnunciosOPTCG",
+        })
+        order_id = pedido.get("id")
+        if not order_id:
+            raise RuntimeError(f"resposta inesperada da SuperFrete ao criar o pedido: {pedido}")
+
+        pagamento = _superfrete("/api/v0/checkout", {"orders": [order_id]})
+        if not pagamento.get("success"):
+            raise RuntimeError(f"checkout recusado: {pagamento}")
+        info = ((pagamento.get("purchase") or {}).get("orders") or [{}])[0]
+        etiqueta_url = (info.get("print") or {}).get("url") or ""
+        rastreio = info.get("tracking") or ""
+
+        with conn() as c, c.cursor() as cur:
+            cur.execute(
+                """UPDATE venda SET frete_order_id=%s, etiqueta_url=%s, etiqueta_rastreio=%s,
+                          etiqueta_status='gerada' WHERE id=%s""",
+                (order_id, etiqueta_url, rastreio, vid))
+            c.commit()
+        return jsonify(etiqueta_url=etiqueta_url, rastreio=rastreio)
+    except Exception as e:
+        try:
+            with conn() as c, c.cursor() as cur:
+                cur.execute("UPDATE venda SET etiqueta_status='erro' WHERE id=%s", (vid,))
+                c.commit()
+        except Exception:
+            pass
+        return jsonify(erro=f"falha ao gerar etiqueta: {e}"), 502
 
 
 init_db()
