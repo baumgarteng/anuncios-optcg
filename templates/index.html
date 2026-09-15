@@ -563,7 +563,9 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
         <div class="fields" style="margin-top:10px">
           <div><label>Nome do destinatário</label><input id="v-end-nome"></div>
           <div><label>CPF</label><input id="v-end-cpf" inputmode="numeric"></div>
-          <div><label>CEP</label><input id="v-end-cep" inputmode="numeric" maxlength="9"></div>
+          <div><label>CEP</label><input id="v-end-cep" inputmode="numeric" maxlength="9">
+            <small id="v-cep-status" class="hint" style="display:block;margin-top:3px"></small>
+          </div>
           <div><label>Telefone</label><input id="v-end-telefone" inputmode="numeric"></div>
           <div><label>Rua</label><input id="v-end-rua"></div>
           <div><label>Número</label><input id="v-end-numero"></div>
@@ -650,7 +652,7 @@ const FRASES_PADRAO=[
 ];
 
 let photos=[], cards=[], gen=null, mode='curto', saved=[], editandoId=null;
-let vendas=[], vendaIndicadores=null, vendaEditId=null, vendaCartasTmp=[], freteOpcoes=[];
+let vendas=[], vendaIndicadores=null, vendaEditId=null, vendaAnuncioId=null, vendaCartasTmp=[], freteOpcoes=[];
 const ORIGEM_LABEL={anuncio:'Anúncio', whatsapp_grupo:'Grupo WhatsApp', outro:'Outro'};
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
@@ -1485,12 +1487,13 @@ $('#saved').addEventListener('click',async e=>{
     catch(err){showErr('Não consegui excluir: '+err.message);}}}
   if(ed)carregarParaEditar(+ed.dataset.editAd);
   if(v){
-    if(!confirm('Marcar esta carta como vendida? Ela vai pra aba Vendidos.'))return;
-    try{
-      await api('/api/anuncios/'+v.dataset.vender+'/vender',{method:'POST'});
-      toast('Marcada como vendida — veja na aba Vendidos');
-      carregar();
-    }catch(err){showErr('Não consegui atualizar: '+err.message);}
+    const ad=saved.find(x=>String(x.id)===v.dataset.vender);
+    if(!ad)return;
+    const cartas=(ad.cards||[]).map(c=>({
+      nome:c.name||'', codigo:(c.code||'')+(c.variant?'-'+c.variant:''),
+      preco:c.preco??'', quantidade:c.quantidade||1,
+    }));
+    abrirVendaModal({origem:'whatsapp_grupo',cards:cartas},ad.id);
   }
 });
 $('#q').oninput=()=>{clearTimeout(tmr);tmr=setTimeout(carregar,350);};
@@ -1661,9 +1664,10 @@ $('#v-add-carta').onclick=()=>{vendaCartasTmp.push({nome:'',codigo:'',preco:'',q
 $('#v-origem').addEventListener('change',()=>{
   $('#v-grupo-wrap').classList.toggle('hide',$('#v-origem').value!=='whatsapp_grupo');
 });
-function abrirVendaModal(venda){
-  vendaEditId=venda?venda.id:null;
-  $('#venda-titulo').textContent=venda?'Editar venda':'Registrar venda externa';
+function abrirVendaModal(venda,anuncioId){
+  vendaEditId=(venda&&venda.id)?venda.id:null;
+  vendaAnuncioId=anuncioId||(venda&&venda.anuncio_id)||null;
+  $('#venda-titulo').textContent=vendaEditId?'Editar venda':(vendaAnuncioId?'Registrar venda deste anúncio':'Registrar venda externa');
   $('#v-origem').value=(venda&&venda.origem)||'whatsapp_grupo';
   $('#v-grupo-wrap').classList.toggle('hide',$('#v-origem').value!=='whatsapp_grupo');
   $('#v-grupo').value=(venda&&venda.origem_detalhe)||'';
@@ -1677,8 +1681,32 @@ function abrirVendaModal(venda){
   $('#v-end-telefone').value=end.telefone||'';$('#v-end-rua').value=end.rua||'';$('#v-end-numero').value=end.numero||'';
   $('#v-end-complemento').value=end.complemento||'';$('#v-end-bairro').value=end.bairro||'';
   $('#v-end-cidade').value=end.cidade||'';$('#v-end-uf').value=end.uf||'';$('#v-end-email').value=end.email||'';
+  $('#v-cep-status').textContent='';
   $('#venda-overlay').classList.remove('hide');
 }
+async function buscarCep(){
+  const cep=$('#v-end-cep').value.replace(/\D/g,'');
+  const status=$('#v-cep-status');
+  if(cep.length!==8){status.textContent='';return;}
+  status.textContent='Buscando endereço…';
+  try{
+    const d=await api('/api/cep/'+cep);
+    $('#v-end-rua').value=d.rua||'';
+    $('#v-end-bairro').value=d.bairro||'';
+    $('#v-end-cidade').value=d.cidade||'';
+    $('#v-end-uf').value=(d.uf||'').toUpperCase();
+    if(d.complemento&&!$('#v-end-complemento').value)$('#v-end-complemento').value=d.complemento;
+    status.textContent='';
+    $('#v-end-numero').focus();
+  }catch(e){
+    status.textContent='CEP não encontrado — preencha o endereço na mão';
+  }
+}
+let tmrCep=null;
+$('#v-end-cep').addEventListener('input',()=>{
+  clearTimeout(tmrCep);
+  tmrCep=setTimeout(buscarCep,400);
+});
 $('#btn-venda-externa').onclick=()=>abrirVendaModal(null);
 $('#v-cancel').onclick=()=>$('#venda-overlay').classList.add('hide');
 $('#v-salvar').onclick=async()=>{
@@ -1706,11 +1734,13 @@ $('#v-salvar').onclick=async()=>{
       await api('/api/vendas/'+vendaEditId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       toast('Venda atualizada');
     }else{
+      if(vendaAnuncioId)payload.anuncio_id=vendaAnuncioId;
       await api('/api/vendas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      toast('Venda registrada');
+      toast(vendaAnuncioId?'Venda registrada — anúncio marcado como vendido':'Venda registrada');
     }
     $('#venda-overlay').classList.add('hide');
     carregarVendas();
+    if(vendaAnuncioId)carregar();
   }catch(e){showErr('Não consegui salvar a venda: '+e.message);}
 };
 $('#tab-new').onclick=()=>tab('new');

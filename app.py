@@ -772,40 +772,29 @@ def api_excluir(aid):
         return jsonify(erro=str(e)), 500
 
 
-@app.post("/api/anuncios/<int:aid>/vender")
-def api_marcar_vendida(aid):
-    """Alterna entre vendida/publicado. Marcar cria uma linha em venda
-    (origem='anuncio', com snapshot das cartas/preço) — é essa linha que
-    aparece na aba Vendidos. Desfazer apaga a venda ligada a esse anúncio
-    (ela ainda não tinha dado real de comprador/frete preenchido nesse
-    ponto; se já tinha, o usuário perde e tem que recriar — aceitável pro
-    tamanho desse app)."""
-    try:
-        with conn() as c, c.cursor() as cur:
-            cur.execute("SELECT status, cards, total FROM anuncio WHERE id = %s", (aid,))
-            row = cur.fetchone()
-            if not row:
-                return jsonify(erro="anúncio não encontrado"), 404
-            if row["status"] == "vendida":
-                cur.execute(
-                    "UPDATE anuncio SET status='publicado', vendido_em=NULL WHERE id=%s", (aid,))
-                cur.execute("DELETE FROM venda WHERE anuncio_id=%s", (aid,))
-                novo_status = "publicado"
-            else:
-                cur.execute(
-                    "UPDATE anuncio SET status='vendida', vendido_em=now() WHERE id=%s", (aid,))
-                cur.execute(
-                    """INSERT INTO venda (anuncio_id, origem, cards, preco_total)
-                       VALUES (%s,'anuncio',%s,%s)""",
-                    (aid, json.dumps(row["cards"], ensure_ascii=False), row["total"]))
-                novo_status = "vendida"
-            c.commit()
-        return jsonify(id=aid, status=novo_status)
-    except Exception as e:
-        return jsonify(erro=str(e)), 500
-
-
 # ---------------------------------------------------------------- vendas
+@app.get("/api/cep/<cep>")
+def api_cep(cep):
+    cep = re.sub(r"\D", "", cep or "")
+    if len(cep) != 8:
+        return jsonify(erro="CEP inválido — precisa ter 8 dígitos"), 400
+    try:
+        with urllib.request.urlopen(f"https://viacep.com.br/ws/{cep}/json/", timeout=10) as r:
+            d = json.loads(r.read())
+    except Exception as e:
+        return jsonify(erro=f"falha ao consultar CEP: {e}"), 502
+    if d.get("erro"):
+        return jsonify(erro="CEP não encontrado"), 404
+    return jsonify(
+        cep=cep,
+        rua=d.get("logradouro") or "",
+        complemento=d.get("complemento") or "",
+        bairro=d.get("bairro") or "",
+        cidade=d.get("localidade") or "",
+        uf=d.get("uf") or "",
+    )
+
+
 @app.post("/api/frete/calcular")
 def api_frete_calcular():
     body = request.json or {}
@@ -868,20 +857,28 @@ def api_vendas_listar():
 
 @app.post("/api/vendas")
 def api_vendas_criar():
+    """anuncio_id (opcional) liga a venda a um anúncio já publicado — usado
+    quando o vendedor clica "Vendida" num anúncio: o modal abre pré-carregado
+    com as cartas do anúncio e, ao salvar, o anúncio muda pra status='vendida'
+    na mesma transação da venda."""
     b = request.json or {}
     cards = b.get("cards") or []
+    anuncio_id = b.get("anuncio_id")
     preco = float(b["preco_total"]) if b.get("preco_total") not in (None, "") else \
         sum(float(c.get("preco") or 0) * int(c.get("quantidade") or 1) for c in cards)
     try:
         with conn() as c, c.cursor() as cur:
             cur.execute(
-                """INSERT INTO venda (origem, origem_detalhe, comprador, cards, preco_total,
+                """INSERT INTO venda (anuncio_id, origem, origem_detalhe, comprador, cards, preco_total,
                                        frete_servico, frete_valor)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-                (b.get("origem") or "outro", b.get("origem_detalhe"), b.get("comprador"),
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (anuncio_id, b.get("origem") or "outro", b.get("origem_detalhe"), b.get("comprador"),
                  json.dumps(cards, ensure_ascii=False), preco,
                  b.get("frete_servico"), b.get("frete_valor")))
             vid = cur.fetchone()["id"]
+            if anuncio_id:
+                cur.execute(
+                    "UPDATE anuncio SET status='vendida', vendido_em=now() WHERE id=%s", (anuncio_id,))
             c.commit()
         return jsonify(id=vid)
     except Exception as e:

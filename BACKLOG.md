@@ -8,8 +8,8 @@ Calculadora de frete real no topo de "Anúncios Salvos" (`POST /api/frete/calcul
 ## 2. Dados de pagamento pro comprador
 Adicionar um jeito de guardar (e opcionalmente incluir no anúncio ou mandar direto pro interessado) os dados de pagamento — chave PIX, ou outro método aceito. Definir se isso entra no texto do anúncio, fica só salvo pra copiar quando alguém se interessa, ou aparece em algum outro fluxo.
 
-## ~~3. Botão "Confirmar venda" num anúncio salvo~~ ✅ feito em 2026-09-14
-`POST /api/anuncios/<id>/vender` alterna entre `vendida`/`publicado`, botão "Vendida" na linha da lista.
+## ~~3. Botão "Confirmar venda" num anúncio salvo~~ ✅ feito em 2026-09-14, unificado com o modal de venda em 2026-09-15
+O botão "Vendida" na lista agora abre o mesmo modal de registrar venda (item 6), pré-carregado com as cartas do anúncio — dá pra escolher o grupo de WhatsApp de onde veio o comprador e adicionar outras cartas antes de confirmar. `POST /api/anuncios/<id>/vender` foi removido; `POST /api/vendas` passou a aceitar `anuncio_id` opcional e marca o anúncio como vendido na mesma transação da venda.
 
 ## ~~4. Guardar número de vendas~~ ✅ feito em 2026-09-14, expandido em 2026-09-15
 Virou uma aba "Vendidos" completa dentro de "Anúncios Salvos": indicadores (receita total, nº de vendas, ticket médio, quebra por origem), gráfico de receita por dia, e tabela `venda` própria (independente de `anuncio` — cobre vendas externas também).
