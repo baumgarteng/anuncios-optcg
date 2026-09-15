@@ -640,6 +640,16 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
   </div>
 </div>
 
+<div class="editor-overlay hide" id="superfrete-overlay">
+  <div class="editor-panel" style="max-width:440px">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>SuperFrete</h3>
+    <div id="superfrete-body"></div>
+    <div class="editor-actions">
+      <button class="btn ghost sm" id="superfrete-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <input type="file" id="file-verso" accept="image/*" class="hide">
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <script>
@@ -1636,11 +1646,6 @@ function renderVendasList(){
     const nome=cs.map(c=>c.nome||c.name).filter(Boolean).join(' + ')||'Venda sem carta especificada';
     const origemTxt=(v.origem==='whatsapp_grupo'&&v.origem_detalhe)?`Grupo: ${esc(v.origem_detalhe)}`:(ORIGEM_LABEL[v.origem]||v.origem);
     const temEndereco=!!(v.endereco&&v.endereco.cep);
-    const etiquetaBtn=v.etiqueta_url
-      ?`<a class="btn ghost sm" href="${v.etiqueta_url}" target="_blank" rel="noopener">Ver etiqueta</a>
-        <button class="btn ghost sm" data-etiqueta-status="${v.id}">Verificar status</button>
-        <button class="btn danger sm" data-etiqueta-reset="${v.id}">Etiqueta cancelada, gerar outra</button>`
-      :`<button class="btn ghost sm" data-etiqueta="${v.id}" ${temEndereco?'':'disabled title="Preencha o endereço completo em Editar"'}>Gerar etiqueta</button>`;
     const imgVenda=cs.map(c=>c.image_url).find(Boolean)||v.capa_anuncio;
     const thumbVenda=imgVenda?`<img class="sv-thumb" src="${imgVenda}" alt="">`
       :`<div class="sv-thumb" style="display:flex;align-items:center;justify-content:center">${ICO_CARD}</div>`;
@@ -1648,50 +1653,84 @@ function renderVendasList(){
       ${thumbVenda}
       <div class="sv-info">
         <div class="sv-name">${esc(nome)}</div>
-        <div class="sv-meta mono">${esc(origemTxt)}${v.comprador?' · '+esc(v.comprador):''} · ${brl(v.preco_total)} · ${new Date(v.criado_em).toLocaleDateString('pt-BR')}${v.etiqueta_status?' · etiqueta: '+esc(v.etiqueta_status):''}</div>
+        <div class="sv-meta mono">${esc(origemTxt)}${v.comprador?' · '+esc(v.comprador):''} · ${brl(v.preco_total)} · ${new Date(v.criado_em).toLocaleDateString('pt-BR')}</div>
       </div>
       <div class="sv-actions">
         <button class="btn ghost sm" data-editar-venda="${v.id}">Editar</button>
-        ${etiquetaBtn}
+        <button class="btn ghost sm" data-superfrete="${v.id}">SuperFrete${v.etiqueta_url?' ✓':temEndereco?'':' ⚠'}</button>
         <button class="btn danger sm" data-excluir-venda="${v.id}">Excluir</button>
       </div>
     </div>`;
   }).join('');
 }
-$('#vendas-list').addEventListener('click',async e=>{
+$('#vendas-list').addEventListener('click',e=>{
   const ed=e.target.closest('button[data-editar-venda]');
   const del=e.target.closest('button[data-excluir-venda]');
-  const et=e.target.closest('button[data-etiqueta]');
-  const st=e.target.closest('button[data-etiqueta-status]');
-  const rst=e.target.closest('button[data-etiqueta-reset]');
+  const sf=e.target.closest('button[data-superfrete]');
   if(ed){const v=vendas.find(x=>String(x.id)===ed.dataset.editarVenda);if(v)abrirVendaModal(v);}
   if(del){if(confirm('Excluir este registro de venda? Se ela veio de um anúncio marcado como vendida, o anúncio volta pra aba Anúncios. Não dá pra desfazer.')){
-    try{await api('/api/vendas/'+del.dataset.excluirVenda,{method:'DELETE'});toast('Excluído');carregarVendas();carregar();}
-    catch(err){showErr('Não consegui excluir: '+err.message);}}}
-  if(et){
+    api('/api/vendas/'+del.dataset.excluirVenda,{method:'DELETE'}).then(()=>{toast('Excluído');carregarVendas();carregar();})
+      .catch(err=>showErr('Não consegui excluir: '+err.message));}}
+  if(sf)abrirSuperfrete(+sf.dataset.superfrete);
+});
+
+/* ---------- modal SuperFrete (gerar/consultar/resetar etiqueta) ---------- */
+let superfreteVid=null;
+function renderSuperfreteBody(v){
+  const temEndereco=!!(v.endereco&&v.endereco.cep);
+  const chipCls=v.etiqueta_status==='gerada'?'ok':(v.etiqueta_status&&v.etiqueta_status!=='gerada'?'warn':'');
+  const statusChip=v.etiqueta_status?` <span class="chip ${chipCls}">${esc(v.etiqueta_status)}</span>`:'';
+  if(!v.etiqueta_url){
+    return `
+      <div class="hint" style="margin-bottom:14px">${temEndereco
+        ?'Nenhuma etiqueta gerada ainda pra esta venda.'
+        :'Preencha o endereço completo do comprador (botão Editar) antes de gerar a etiqueta.'}</div>
+      <button class="btn" id="sf-gerar" ${temEndereco?'':'disabled'} style="width:100%">Gerar etiqueta</button>`;
+  }
+  return `
+    <div class="hint" style="margin-bottom:4px">Status atual${statusChip}</div>
+    ${v.etiqueta_rastreio?`<div class="hint" style="margin-bottom:14px">Rastreio: <span class="mono">${esc(v.etiqueta_rastreio)}</span></div>`:'<div style="margin-bottom:14px"></div>'}
+    <div class="row" style="margin-bottom:10px">
+      <a class="btn ghost sm" href="${v.etiqueta_url}" target="_blank" rel="noopener" style="flex:1;text-align:center">Ver etiqueta (PDF)</a>
+      <button class="btn ghost sm" id="sf-status" style="flex:1">Verificar status</button>
+    </div>
+    <button class="btn danger sm" id="sf-reset" style="width:100%">Etiqueta cancelada, gerar outra</button>`;
+}
+function abrirSuperfrete(vid){
+  superfreteVid=vid;
+  const v=vendas.find(x=>x.id===vid);
+  if(!v)return;
+  $('#superfrete-body').innerHTML=renderSuperfreteBody(v);
+  $('#superfrete-overlay').classList.remove('hide');
+}
+$('#superfrete-close').onclick=()=>$('#superfrete-overlay').classList.add('hide');
+$('#superfrete-body').addEventListener('click',async e=>{
+  const v=vendas.find(x=>x.id===superfreteVid);
+  if(!v)return;
+  if(e.target.id==='sf-gerar'){
     if(!confirm('Isso vai GERAR E PAGAR uma etiqueta de verdade, usando o saldo da sua conta SuperFrete. Confirma?'))return;
-    et.disabled=true;const orig=et.textContent;et.textContent='Gerando…';
+    const btn=e.target;btn.disabled=true;const orig=btn.textContent;btn.textContent='Gerando…';
     try{
-      const r=await api('/api/vendas/'+et.dataset.etiqueta+'/etiqueta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmar:true})});
+      const r=await api('/api/vendas/'+v.id+'/etiqueta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmar:true})});
       toast('Etiqueta gerada — rastreio '+(r.rastreio||'—'));
-      carregarVendas();
-    }catch(err){showErr('Não consegui gerar a etiqueta: '+err.message);et.disabled=false;et.textContent=orig;}
+      await carregarVendas();abrirSuperfrete(v.id);
+    }catch(err){showErr('Não consegui gerar a etiqueta: '+err.message);btn.disabled=false;btn.textContent=orig;}
   }
-  if(st){
-    st.disabled=true;const orig=st.textContent;st.textContent='Consultando…';
+  if(e.target.id==='sf-status'){
+    const btn=e.target;btn.disabled=true;const orig=btn.textContent;btn.textContent='Consultando…';
     try{
-      const r=await api('/api/vendas/'+st.dataset.etiquetaStatus+'/etiqueta/status');
+      const r=await api('/api/vendas/'+v.id+'/etiqueta/status');
       toast('Status na SuperFrete: '+(r.status||'desconhecido'));
-      carregarVendas();
+      await carregarVendas();abrirSuperfrete(v.id);
     }catch(err){showErr('Não consegui consultar o status: '+err.message);}
-    finally{st.disabled=false;st.textContent=orig;}
+    finally{btn.disabled=false;btn.textContent=orig;}
   }
-  if(rst){
+  if(e.target.id==='sf-reset'){
     if(!confirm('Isso só esquece a etiqueta gerada AQUI no app — não cancela nem reembolsa nada na SuperFrete (se ainda não cancelou lá, faça isso primeiro no painel deles). Confirma que a etiqueta atual está cancelada/inválida e quer poder gerar outra?'))return;
     try{
-      await api('/api/vendas/'+rst.dataset.etiquetaReset+'/etiqueta/resetar',{method:'POST'});
+      await api('/api/vendas/'+v.id+'/etiqueta/resetar',{method:'POST'});
       toast('Etiqueta esquecida — já pode gerar outra');
-      carregarVendas();
+      await carregarVendas();abrirSuperfrete(v.id);
     }catch(err){showErr('Não consegui resetar a etiqueta: '+err.message);}
   }
 });
