@@ -51,6 +51,29 @@ def _superfrete(path, body):
         detalhe = e.read().decode(errors="replace")
         raise RuntimeError(f"SuperFrete {e.code}: {detalhe[:300]}")
 
+
+def _superfrete_get(path):
+    """GET autenticado na API da SuperFrete — só consulta, nunca gasta
+    saldo. Usado pra checar o status real de um pedido já criado (ex.:
+    descobrir se foi cancelado depois por erro no endereço)."""
+    if not SUPERFRETE_TOKEN:
+        raise RuntimeError("SUPERFRETE_TOKEN não configurado")
+    req = urllib.request.Request(
+        SUPERFRETE_BASE.rstrip("/") + path,
+        headers={
+            "Authorization": "Bearer " + SUPERFRETE_TOKEN,
+            "User-Agent": "AnunciosOPTCG/1.0 (gustavo.baumgarten@gmail.com)",
+        },
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        detalhe = e.read().decode(errors="replace")
+        raise RuntimeError(f"SuperFrete {e.code}: {detalhe[:300]}")
+
+
 app = Flask(__name__)
 
 
@@ -1058,6 +1081,53 @@ def api_vendas_etiqueta(vid):
         except Exception:
             pass
         return jsonify(erro=f"falha ao gerar etiqueta: {e}"), 502
+
+
+@app.get("/api/vendas/<int:vid>/etiqueta/status")
+def api_vendas_etiqueta_status(vid):
+    """Consulta o status ATUAL do pedido na SuperFrete (GET — só leitura,
+    não gasta saldo nenhum). Serve pra descobrir se uma etiqueta já gerada
+    foi cancelada depois (ex.: erro no endereço, resolvido só no painel da
+    SuperFrete) sem precisar ir checar lá manualmente. Atualiza
+    etiqueta_status aqui com o que a SuperFrete responder."""
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute("SELECT frete_order_id FROM venda WHERE id = %s", (vid,))
+            venda = cur.fetchone()
+        if not venda:
+            return jsonify(erro="venda não encontrada"), 404
+        order_id = venda.get("frete_order_id")
+        if not order_id:
+            return jsonify(erro="esta venda ainda não tem pedido criado na SuperFrete"), 400
+        info = _superfrete_get(f"/api/v0/orders/{order_id}")
+        status = info.get("status") or ""
+        with conn() as c, c.cursor() as cur:
+            cur.execute("UPDATE venda SET etiqueta_status=%s WHERE id=%s", (status, vid))
+            c.commit()
+        return jsonify(status=status, tracking=info.get("tracking") or "",
+                       eventos=info.get("tracking_events") or [])
+    except Exception as e:
+        return jsonify(erro=f"falha ao consultar status: {e}"), 502
+
+
+@app.post("/api/vendas/<int:vid>/etiqueta/resetar")
+def api_vendas_etiqueta_resetar(vid):
+    """Esquece a etiqueta gerada nesta venda pra liberar "Gerar etiqueta"
+    de novo. NÃO cancela nem reembolsa nada na SuperFrete — isso já deve
+    ter sido feito manualmente lá (ou confirmado via /etiqueta/status)
+    antes de chamar isso."""
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute(
+                """UPDATE venda SET etiqueta_url=NULL, etiqueta_rastreio=NULL,
+                          frete_order_id=NULL, etiqueta_status='cancelada' WHERE id=%s""",
+                (vid,))
+            if cur.rowcount == 0:
+                return jsonify(erro="venda não encontrada"), 404
+            c.commit()
+        return jsonify(ok=True)
+    except Exception as e:
+        return jsonify(erro=str(e)), 500
 
 
 init_db()

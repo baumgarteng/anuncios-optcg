@@ -1630,7 +1630,9 @@ function renderVendasList(){
     const origemTxt=(v.origem==='whatsapp_grupo'&&v.origem_detalhe)?`Grupo: ${esc(v.origem_detalhe)}`:(ORIGEM_LABEL[v.origem]||v.origem);
     const temEndereco=!!(v.endereco&&v.endereco.cep);
     const etiquetaBtn=v.etiqueta_url
-      ?`<a class="btn ghost sm" href="${v.etiqueta_url}" target="_blank" rel="noopener">Ver etiqueta</a>`
+      ?`<a class="btn ghost sm" href="${v.etiqueta_url}" target="_blank" rel="noopener">Ver etiqueta</a>
+        <button class="btn ghost sm" data-etiqueta-status="${v.id}">Verificar status</button>
+        <button class="btn danger sm" data-etiqueta-reset="${v.id}">Etiqueta cancelada, gerar outra</button>`
       :`<button class="btn ghost sm" data-etiqueta="${v.id}" ${temEndereco?'':'disabled title="Preencha o endereço completo em Editar"'}>Gerar etiqueta</button>`;
     const imgVenda=cs.map(c=>c.image_url).find(Boolean)||v.capa_anuncio;
     const thumbVenda=imgVenda?`<img class="sv-thumb" src="${imgVenda}" alt="">`
@@ -1639,7 +1641,7 @@ function renderVendasList(){
       ${thumbVenda}
       <div class="sv-info">
         <div class="sv-name">${esc(nome)}</div>
-        <div class="sv-meta mono">${esc(origemTxt)}${v.comprador?' · '+esc(v.comprador):''} · ${brl(v.preco_total)} · ${new Date(v.criado_em).toLocaleDateString('pt-BR')}</div>
+        <div class="sv-meta mono">${esc(origemTxt)}${v.comprador?' · '+esc(v.comprador):''} · ${brl(v.preco_total)} · ${new Date(v.criado_em).toLocaleDateString('pt-BR')}${v.etiqueta_status?' · etiqueta: '+esc(v.etiqueta_status):''}</div>
       </div>
       <div class="sv-actions">
         <button class="btn ghost sm" data-editar-venda="${v.id}">Editar</button>
@@ -1653,6 +1655,8 @@ $('#vendas-list').addEventListener('click',async e=>{
   const ed=e.target.closest('button[data-editar-venda]');
   const del=e.target.closest('button[data-excluir-venda]');
   const et=e.target.closest('button[data-etiqueta]');
+  const st=e.target.closest('button[data-etiqueta-status]');
+  const rst=e.target.closest('button[data-etiqueta-reset]');
   if(ed){const v=vendas.find(x=>String(x.id)===ed.dataset.editarVenda);if(v)abrirVendaModal(v);}
   if(del){if(confirm('Excluir este registro de venda? Se ela veio de um anúncio marcado como vendida, o anúncio volta pra aba Anúncios. Não dá pra desfazer.')){
     try{await api('/api/vendas/'+del.dataset.excluirVenda,{method:'DELETE'});toast('Excluído');carregarVendas();carregar();}
@@ -1665,6 +1669,23 @@ $('#vendas-list').addEventListener('click',async e=>{
       toast('Etiqueta gerada — rastreio '+(r.rastreio||'—'));
       carregarVendas();
     }catch(err){showErr('Não consegui gerar a etiqueta: '+err.message);et.disabled=false;et.textContent=orig;}
+  }
+  if(st){
+    st.disabled=true;const orig=st.textContent;st.textContent='Consultando…';
+    try{
+      const r=await api('/api/vendas/'+st.dataset.etiquetaStatus+'/etiqueta/status');
+      toast('Status na SuperFrete: '+(r.status||'desconhecido'));
+      carregarVendas();
+    }catch(err){showErr('Não consegui consultar o status: '+err.message);}
+    finally{st.disabled=false;st.textContent=orig;}
+  }
+  if(rst){
+    if(!confirm('Isso só esquece a etiqueta gerada AQUI no app — não cancela nem reembolsa nada na SuperFrete (se ainda não cancelou lá, faça isso primeiro no painel deles). Confirma que a etiqueta atual está cancelada/inválida e quer poder gerar outra?'))return;
+    try{
+      await api('/api/vendas/'+rst.dataset.etiquetaReset+'/etiqueta/resetar',{method:'POST'});
+      toast('Etiqueta esquecida — já pode gerar outra');
+      carregarVendas();
+    }catch(err){showErr('Não consegui resetar a etiqueta: '+err.message);}
   }
 });
 
