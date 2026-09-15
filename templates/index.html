@@ -497,9 +497,12 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
     </div>
 
     <div id="sub-anuncios">
-      <div class="row" style="margin-bottom:10px">
-        <input id="q" placeholder="Buscar por nome ou código" style="max-width:320px">
-        <button class="btn ghost sm" id="btn-reload">Atualizar</button>
+      <div class="row" style="margin-bottom:10px;justify-content:space-between">
+        <div class="row">
+          <input id="q" placeholder="Buscar por nome ou código" style="max-width:320px">
+          <button class="btn ghost sm" id="btn-reload">Atualizar</button>
+        </div>
+        <button class="btn sm" id="btn-venda-lote" disabled>Gerar venda com selecionadas</button>
       </div>
       <div class="hint" id="saved-summary" style="margin-bottom:12px"></div>
       <div class="saved-list" id="saved"></div>
@@ -652,7 +655,8 @@ const FRASES_PADRAO=[
 ];
 
 let photos=[], cards=[], gen=null, mode='curto', saved=[], editandoId=null;
-let vendas=[], vendaIndicadores=null, vendaEditId=null, vendaAnuncioId=null, vendaCartasTmp=[], freteOpcoes=[];
+let vendas=[], vendaIndicadores=null, vendaEditId=null, vendaAnuncioIds=[], vendaCartasTmp=[], freteOpcoes=[];
+let vendaSelecionados=new Set();
 const ORIGEM_LABEL={anuncio:'Anúncio', whatsapp_grupo:'Grupo WhatsApp', outro:'Outro'};
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
@@ -1061,10 +1065,12 @@ function renderSaved(){
     const accent=(cs[0]&&cs[0].colors&&cs[0].colors[0]&&COLORS[cs[0].colors[0]])||'var(--primary)';
     const thumb=a.capa?`<img class="sv-thumb" src="${a.capa}" alt="">`
       :`<div class="sv-thumb" style="display:flex;align-items:center;justify-content:center">${ICO_CARD}</div>`;
+    const loteBadge=a.lote_tamanho>1?` <span class="chip" title="Salva junto com outras ${a.lote_tamanho-1} carta(s) do mesmo anúncio">lote de ${a.lote_tamanho}</span>`:'';
     return `<div class="sv-row" style="--accent:${accent}">
+      <input type="checkbox" class="sv-check" data-check="${a.id}" ${vendaSelecionados.has(a.id)?'checked':''} style="width:auto;flex-shrink:0">
       ${thumb}
       <div class="sv-info">
-        <div class="sv-name">${esc(nome)}</div>
+        <div class="sv-name">${esc(nome)}${loteBadge}</div>
         <div class="sv-meta mono">${esc(cod)} · ${brl(a.total)} · ${new Date(a.criado_em).toLocaleDateString('pt-BR')}</div>
       </div>
       <div class="sv-actions">
@@ -1493,9 +1499,31 @@ $('#saved').addEventListener('click',async e=>{
       nome:c.name||'', codigo:(c.code||'')+(c.variant?'-'+c.variant:''),
       preco:c.preco??'', quantidade:c.quantidade||1, image_url:c.image_url||null,
     }));
-    abrirVendaModal({origem:'whatsapp_grupo',cards:cartas},ad.id);
+    abrirVendaModal({origem:'whatsapp_grupo',cards:cartas},[ad.id]);
   }
 });
+$('#saved').addEventListener('change',e=>{
+  const chk=e.target.closest('input[data-check]');
+  if(!chk)return;
+  const id=+chk.dataset.check;
+  if(chk.checked)vendaSelecionados.add(id);else vendaSelecionados.delete(id);
+  atualizarBtnVendaLote();
+});
+function atualizarBtnVendaLote(){
+  const n=vendaSelecionados.size;
+  $('#btn-venda-lote').disabled=n===0;
+  $('#btn-venda-lote').textContent=n?`Gerar venda com ${n} selecionada${n===1?'':'s'}`:'Gerar venda com selecionadas';
+}
+$('#btn-venda-lote').onclick=()=>{
+  const ids=[...vendaSelecionados];
+  if(!ids.length)return;
+  const escolhidos=saved.filter(a=>ids.includes(a.id));
+  const cartas=escolhidos.flatMap(ad=>(ad.cards||[]).map(c=>({
+    nome:c.name||'', codigo:(c.code||'')+(c.variant?'-'+c.variant:''),
+    preco:c.preco??'', quantidade:c.quantidade||1, image_url:c.image_url||null,
+  })));
+  abrirVendaModal({origem:'whatsapp_grupo',cards:cartas},ids);
+};
 $('#q').oninput=()=>{clearTimeout(tmr);tmr=setTimeout(carregar,350);};
 $('#btn-reload').onclick=carregar;
 
@@ -1667,10 +1695,13 @@ $('#v-add-carta').onclick=()=>{vendaCartasTmp.push({nome:'',codigo:'',preco:'',q
 $('#v-origem').addEventListener('change',()=>{
   $('#v-grupo-wrap').classList.toggle('hide',$('#v-origem').value!=='whatsapp_grupo');
 });
-function abrirVendaModal(venda,anuncioId){
+function abrirVendaModal(venda,anuncioIds){
   vendaEditId=(venda&&venda.id)?venda.id:null;
-  vendaAnuncioId=anuncioId||(venda&&venda.anuncio_id)||null;
-  $('#venda-titulo').textContent=vendaEditId?'Editar venda':(vendaAnuncioId?'Registrar venda deste anúncio':'Registrar venda externa');
+  vendaAnuncioIds=anuncioIds||(venda&&venda.anuncio_ids)||[];
+  const nAnuncios=vendaAnuncioIds.length;
+  $('#venda-titulo').textContent=vendaEditId?'Editar venda'
+    :nAnuncios>1?`Registrar venda de ${nAnuncios} anúncios`
+    :nAnuncios===1?'Registrar venda deste anúncio':'Registrar venda externa';
   $('#v-origem').value=(venda&&venda.origem)||'whatsapp_grupo';
   $('#v-grupo-wrap').classList.toggle('hide',$('#v-origem').value!=='whatsapp_grupo');
   $('#v-grupo').value=(venda&&venda.origem_detalhe)||'';
@@ -1738,13 +1769,13 @@ $('#v-salvar').onclick=async()=>{
       await api('/api/vendas/'+vendaEditId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       toast('Venda atualizada');
     }else{
-      if(vendaAnuncioId)payload.anuncio_id=vendaAnuncioId;
+      if(vendaAnuncioIds.length)payload.anuncio_ids=vendaAnuncioIds;
       await api('/api/vendas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      toast(vendaAnuncioId?'Venda registrada — anúncio marcado como vendido':'Venda registrada');
+      toast(vendaAnuncioIds.length?'Venda registrada — anúncio(s) marcado(s) como vendido(s)':'Venda registrada');
     }
     $('#venda-overlay').classList.add('hide');
     carregarVendas();
-    if(vendaAnuncioId)carregar();
+    if(vendaAnuncioIds.length){vendaSelecionados.clear();carregar();}
   }catch(e){showErr('Não consegui salvar a venda: '+e.message);}
 };
 $('#tab-new').onclick=()=>tab('new');

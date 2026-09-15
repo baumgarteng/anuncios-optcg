@@ -9,7 +9,7 @@ Calculadora de frete real no topo de "Anúncios Salvos" (`POST /api/frete/calcul
 Adicionar um jeito de guardar (e opcionalmente incluir no anúncio ou mandar direto pro interessado) os dados de pagamento — chave PIX, ou outro método aceito. Definir se isso entra no texto do anúncio, fica só salvo pra copiar quando alguém se interessa, ou aparece em algum outro fluxo.
 
 ## ~~3. Botão "Confirmar venda" num anúncio salvo~~ ✅ feito em 2026-09-14, unificado com o modal de venda em 2026-09-15
-O botão "Vendida" na lista agora abre o mesmo modal de registrar venda (item 6), pré-carregado com as cartas do anúncio — dá pra escolher o grupo de WhatsApp de onde veio o comprador e adicionar outras cartas antes de confirmar. `POST /api/anuncios/<id>/vender` foi removido; `POST /api/vendas` passou a aceitar `anuncio_id` opcional e marca o anúncio como vendido na mesma transação da venda.
+O botão "Vendida" na lista agora abre o mesmo modal de registrar venda (item 6), pré-carregado com as cartas do anúncio — dá pra escolher o grupo de WhatsApp de onde veio o comprador e adicionar outras cartas antes de confirmar. `POST /api/anuncios/<id>/vender` foi removido; `POST /api/vendas` passou a aceitar `anuncio_ids` (ver item 10) e marca o(s) anúncio(s) como vendido(s) na mesma transação da venda.
 
 ## ~~4. Guardar número de vendas~~ ✅ feito em 2026-09-14, expandido em 2026-09-15
 Virou uma aba "Vendidos" completa dentro de "Anúncios Salvos": indicadores (receita total, nº de vendas, ticket médio, quebra por origem), gráfico de receita por dia, e tabela `venda` própria (independente de `anuncio` — cobre vendas externas também).
@@ -32,6 +32,11 @@ O snapshot `cards` da venda agora carrega `image_url` (tanto vindo do fluxo "Ven
 - **Data do recebimento do dinheiro** — separada da data da venda (nem sempre cai no mesmo dia).
 - **Como foi pago** (PIX, dinheiro, cartão, transferência — mesmo campo já listado no item 7).
 - **Onde foi pago / banco** — em qual conta/banco o dinheiro caiu.
+
+## ~~10. Salvar anúncio por carta + juntar cartas de vários anúncios numa venda~~ ✅ feito em 2026-09-15
+Um anúncio com várias cartas continua gerando UM texto (o post completo, pra colar no WhatsApp), mas ao salvar agora cria **uma linha em `anuncio` por carta** (cada uma com o mesmo texto e um `lote_id` em comum, só pra indicar na lista "parte de um lote de N"). Isso permite marcar/vender cada carta do post separadamente.
+
+Na aba Anúncios, cada linha ganhou um checkbox e um botão "Gerar venda com selecionadas": dá pra marcar cartas de anúncios diferentes (de lotes diferentes até) e gerar **uma venda só**, com um comprador e um frete cobrindo todas. `venda.anuncio_ids` (array, substituiu o `anuncio_id` singular) guarda todos os anúncios ligados — excluir a venda desfaz o status `vendida` de todos eles.
 
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-15. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
