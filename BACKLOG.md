@@ -26,5 +26,12 @@ O modal de venda (registrar/editar) já tem pra quem foi e como ficou o frete �
 ## 8. [bug] Imagem da carta não aparece na lista de Vendidos
 Toda linha da aba Vendidos mostra o ícone genérico, nunca a foto real. Causa: o snapshot `cards` salvo em `venda` não carrega `image_url`, e a lista nem tenta usar a capa do anúncio de origem. Corrigir: quando a venda vem de um anúncio (marcar como vendida), copiar o `image_url` de cada carta pro snapshot; na renderização da lista, usar a imagem da primeira carta ou, na falta dela, a capa do anúncio ligado (`anuncio_id`) — só cai no ícone genérico mesmo pra venda externa sem foto.
 
+## 9. Mais campos de origem/data/pagamento na venda (relacionado ao item 7)
+- **Origem "Jornada Games"** como opção nova em "onde foi vendido" (hoje só tem grupo de WhatsApp/anúncio/outro).
+- **Data da venda** separada da data de criação do registro (`criado_em`) — pra quando o registro é feito depois do fato.
+- **Data do recebimento do dinheiro** — separada da data da venda (nem sempre cai no mesmo dia).
+- **Como foi pago** (PIX, dinheiro, cartão, transferência — mesmo campo já listado no item 7).
+- **Onde foi pago / banco** — em qual conta/banco o dinheiro caiu.
+
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-15. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
