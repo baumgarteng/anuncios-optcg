@@ -20,5 +20,8 @@ Grid de cards virou lista (uma linha por anúncio) com Editar/Vendida/Excluir in
 ## ~~6. Registrar venda externa~~ ✅ feito em 2026-09-15
 Botão "+ Registrar venda externa" na aba Vendidos: onde foi vendido (grupo de WhatsApp/anúncio/outro), qual grupo, pra quem, cartas vendidas, frete, e endereço completo do comprador (usado depois pra gerar etiqueta). Mesmo modal serve pra editar qualquer venda já registrada.
 
+## 7. Mais informações no registro/edição da venda
+O modal de venda (registrar/editar) já tem pra quem foi e como ficou o frete — falta pelo menos **tipo de pagamento** (PIX, dinheiro, cartão, transferência) e vale avaliar mais campos que façam sentido pro controle: status do pagamento (recebido/pendente), desconto negociado, observação livre da venda.
+
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-15. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
