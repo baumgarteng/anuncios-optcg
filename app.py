@@ -1,4 +1,4 @@
-import os, json, base64, re, datetime
+import os, json, base64, re, datetime, uuid
 import psycopg
 from psycopg.rows import dict_row
 import urllib.request
@@ -112,6 +112,21 @@ def init_db():
             # coluna nova numa tabela que já existe — ADD COLUMN IF NOT EXISTS
             # é aditivo e seguro, diferente de mexer em coluna já existente.
             cur.execute("ALTER TABLE anuncio ADD COLUMN IF NOT EXISTS vendido_em timestamptz")
+            # lote_id agrupa as linhas que nasceram do mesmo clique em "Salvar
+            # no banco" (um anúncio com várias cartas agora vira uma linha por
+            # carta — ver api_salvar) — só pra mostrar "parte de um lote de N"
+            # na lista, não afeta venda nenhuma.
+            cur.execute("ALTER TABLE anuncio ADD COLUMN IF NOT EXISTS lote_id text")
+            cur.execute("CREATE INDEX IF NOT EXISTS anuncio_lote_idx ON anuncio (lote_id)")
+            # venda passa a poder ligar em VÁRIOS anúncios (vender cartas de
+            # anúncios diferentes numa venda só, mesmo frete/comprador).
+            # anuncio_id (singular) fica na tabela só como dado histórico —
+            # nada no código lê/escreve nele depois deste backfill.
+            cur.execute("ALTER TABLE venda ADD COLUMN IF NOT EXISTS anuncio_ids bigint[] NOT NULL DEFAULT '{}'")
+            cur.execute(
+                """UPDATE venda SET anuncio_ids = ARRAY[anuncio_id]
+                    WHERE anuncio_id IS NOT NULL AND anuncio_ids = '{}'""")
+            cur.execute("CREATE INDEX IF NOT EXISTS venda_anuncio_ids_idx ON venda USING GIN (anuncio_ids)")
             c.commit()
         app.logger.info("schema ok")
     except Exception as e:
@@ -671,23 +686,37 @@ def api_gerar():
 
 @app.post("/api/anuncios")
 def api_salvar():
+    """Um anúncio pode falar de várias cartas juntas (o texto gerado menciona
+    todas), mas cada carta vira sua PRÓPRIA linha em `anuncio` — assim dá pra
+    marcar/vender cada carta de um post separadamente depois, sem depender
+    das outras. Todas as linhas nascidas deste clique guardam o mesmo texto
+    (é o post como foi anunciado) e o mesmo `lote_id`, só pra saber depois
+    que vieram do mesmo anúncio."""
     b = request.json or {}
     cards = b.get("cards") or []
-    total = sum(float(c.get("preco") or 0) * int(c.get("quantidade") or 1) for c in cards)
+    if not cards:
+        return jsonify(erro="nenhuma carta informada"), 400
+    lote_id = str(uuid.uuid4())
+    imagens = (b.get("imagens") or [])[:4]
+    ids = []
     try:
         with conn() as c, c.cursor() as cur:
-            cur.execute(
-                """INSERT INTO anuncio (titulo, texto_curto, texto_completo, observacao, total, cards, status)
-                   VALUES (%s,%s,%s,%s,%s,%s,'publicado') RETURNING id""",
-                (b.get("titulo"), b.get("curto"), b.get("completo"), b.get("observacao"),
-                 total, json.dumps(cards, ensure_ascii=False)))
-            aid = cur.fetchone()["id"]
-            for i, img in enumerate((b.get("imagens") or [])[:4]):
+            for card in cards:
+                total_carta = float(card.get("preco") or 0) * int(card.get("quantidade") or 1)
                 cur.execute(
-                    "INSERT INTO anuncio_imagem (anuncio_id, ordem, dados) VALUES (%s,%s,%s)",
-                    (aid, i, img))
+                    """INSERT INTO anuncio (titulo, texto_curto, texto_completo, observacao, total, cards,
+                                             status, lote_id)
+                       VALUES (%s,%s,%s,%s,%s,%s,'publicado',%s) RETURNING id""",
+                    (b.get("titulo"), b.get("curto"), b.get("completo"), b.get("observacao"),
+                     total_carta, json.dumps([card], ensure_ascii=False), lote_id))
+                aid = cur.fetchone()["id"]
+                ids.append(aid)
+                for i, img in enumerate(imagens):
+                    cur.execute(
+                        "INSERT INTO anuncio_imagem (anuncio_id, ordem, dados) VALUES (%s,%s,%s)",
+                        (aid, i, img))
             c.commit()
-        return jsonify(id=aid)
+        return jsonify(ids=ids, id=ids[0])
     except Exception as e:
         return jsonify(erro=str(e)), 500
 
@@ -743,7 +772,9 @@ def api_listar():
         with conn() as c, c.cursor() as cur:
             cur.execute(
                 """SELECT a.id, a.criado_em, a.titulo, a.texto_curto, a.texto_completo,
-                          a.total, a.cards, a.status, a.vendido_em,
+                          a.total, a.cards, a.status, a.vendido_em, a.lote_id,
+                          CASE WHEN a.lote_id IS NULL THEN 1
+                               ELSE COUNT(*) OVER (PARTITION BY a.lote_id) END AS lote_tamanho,
                           (SELECT dados FROM anuncio_imagem i
                             WHERE i.anuncio_id = a.id ORDER BY ordem LIMIT 1) AS capa
                      FROM anuncio a
@@ -830,7 +861,7 @@ def api_vendas_listar():
             cur.execute(
                 """SELECT v.*,
                           (SELECT dados FROM anuncio_imagem i
-                            WHERE i.anuncio_id = v.anuncio_id ORDER BY ordem LIMIT 1) AS capa_anuncio
+                            WHERE i.anuncio_id = ANY(v.anuncio_ids) ORDER BY ordem LIMIT 1) AS capa_anuncio
                      FROM venda v
                     WHERE %s = '' OR v.cards::text ILIKE '%%'||%s||'%%'
                        OR v.comprador ILIKE '%%'||%s||'%%'
@@ -860,28 +891,29 @@ def api_vendas_listar():
 
 @app.post("/api/vendas")
 def api_vendas_criar():
-    """anuncio_id (opcional) liga a venda a um anúncio já publicado — usado
-    quando o vendedor clica "Vendida" num anúncio: o modal abre pré-carregado
-    com as cartas do anúncio e, ao salvar, o anúncio muda pra status='vendida'
-    na mesma transação da venda."""
+    """anuncio_ids (opcional) liga a venda a um ou mais anúncios já
+    publicados — usado quando o vendedor marca uma ou várias cartas
+    anunciadas como vendidas (juntas, mesmo frete, mesmo comprador): o modal
+    abre pré-carregado com as cartas escolhidas e, ao salvar, todos os
+    anúncios ligados mudam pra status='vendida' na mesma transação."""
     b = request.json or {}
     cards = b.get("cards") or []
-    anuncio_id = b.get("anuncio_id")
+    anuncio_ids = b.get("anuncio_ids") or []
     preco = float(b["preco_total"]) if b.get("preco_total") not in (None, "") else \
         sum(float(c.get("preco") or 0) * int(c.get("quantidade") or 1) for c in cards)
     try:
         with conn() as c, c.cursor() as cur:
             cur.execute(
-                """INSERT INTO venda (anuncio_id, origem, origem_detalhe, comprador, cards, preco_total,
+                """INSERT INTO venda (anuncio_ids, origem, origem_detalhe, comprador, cards, preco_total,
                                        frete_servico, frete_valor)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-                (anuncio_id, b.get("origem") or "outro", b.get("origem_detalhe"), b.get("comprador"),
+                (anuncio_ids, b.get("origem") or "outro", b.get("origem_detalhe"), b.get("comprador"),
                  json.dumps(cards, ensure_ascii=False), preco,
                  b.get("frete_servico"), b.get("frete_valor")))
             vid = cur.fetchone()["id"]
-            if anuncio_id:
+            if anuncio_ids:
                 cur.execute(
-                    "UPDATE anuncio SET status='vendida', vendido_em=now() WHERE id=%s", (anuncio_id,))
+                    "UPDATE anuncio SET status='vendida', vendido_em=now() WHERE id = ANY(%s)", (anuncio_ids,))
             c.commit()
         return jsonify(id=vid)
     except Exception as e:
@@ -924,18 +956,19 @@ def api_vendas_atualizar(vid):
 
 @app.delete("/api/vendas/<int:vid>")
 def api_vendas_excluir(vid):
-    """Excluir uma venda também desfaz a marca de vendida no anúncio de
-    origem (quando existe) — sem isso o anúncio ficaria com status='vendida'
-    escondido da aba Anúncios sem nenhuma venda que o explique."""
+    """Excluir uma venda também desfaz a marca de vendida em TODOS os
+    anúncios ligados (quando existem) — sem isso eles ficariam com
+    status='vendida' escondidos da aba Anúncios sem nenhuma venda que os
+    explique."""
     try:
         with conn() as c, c.cursor() as cur:
-            cur.execute("SELECT anuncio_id FROM venda WHERE id = %s", (vid,))
+            cur.execute("SELECT anuncio_ids FROM venda WHERE id = %s", (vid,))
             row = cur.fetchone()
             cur.execute("DELETE FROM venda WHERE id = %s", (vid,))
-            if row and row["anuncio_id"]:
+            if row and row["anuncio_ids"]:
                 cur.execute(
-                    "UPDATE anuncio SET status='publicado', vendido_em=NULL WHERE id=%s",
-                    (row["anuncio_id"],))
+                    "UPDATE anuncio SET status='publicado', vendido_em=NULL WHERE id = ANY(%s)",
+                    (row["anuncio_ids"],))
             c.commit()
         return jsonify(ok=True)
     except Exception as e:
