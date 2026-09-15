@@ -23,8 +23,8 @@ Botão "+ Registrar venda externa" na aba Vendidos: onde foi vendido (grupo de W
 ## 7. Mais informações no registro/edição da venda
 O modal de venda (registrar/editar) já tem pra quem foi e como ficou o frete — falta pelo menos **tipo de pagamento** (PIX, dinheiro, cartão, transferência) e vale avaliar mais campos que façam sentido pro controle: status do pagamento (recebido/pendente), desconto negociado, observação livre da venda.
 
-## 8. [bug] Imagem da carta não aparece na lista de Vendidos
-Toda linha da aba Vendidos mostra o ícone genérico, nunca a foto real. Causa: o snapshot `cards` salvo em `venda` não carrega `image_url`, e a lista nem tenta usar a capa do anúncio de origem. Corrigir: quando a venda vem de um anúncio (marcar como vendida), copiar o `image_url` de cada carta pro snapshot; na renderização da lista, usar a imagem da primeira carta ou, na falta dela, a capa do anúncio ligado (`anuncio_id`) — só cai no ícone genérico mesmo pra venda externa sem foto.
+## ~~8. [bug] Imagem da carta não aparece na lista de Vendidos~~ ✅ feito em 2026-09-15
+O snapshot `cards` da venda agora carrega `image_url` (tanto vindo do fluxo "Vendida" quanto preservado ao editar). `GET /api/vendas` também traz `capa_anuncio` (foto do anúncio ligado). A lista usa a imagem da primeira carta ou, na falta dela, a capa do anúncio — só cai no ícone genérico pra venda externa sem nenhuma das duas.
 
 ## 9. Mais campos de origem/data/pagamento na venda (relacionado ao item 7)
 - **Origem "Jornada Games"** como opção nova em "onde foi vendido" (hoje só tem grupo de WhatsApp/anúncio/outro).
