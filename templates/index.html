@@ -1791,6 +1791,7 @@ fetch('/healthz').then(r=>r.json()).then(d=>{
   $('#health-wrap').classList.toggle('ok',!!d.ok);
 }).catch(()=>{$('#health').textContent='';});
 carregar();
+carregarVendas();
 renderPreview();
 try{$('#chk-loja').checked=localStorage.getItem('incluirLoja')==='1';}catch(e){}
 $('#chk-loja').addEventListener('change',()=>{
