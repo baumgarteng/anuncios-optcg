@@ -926,7 +926,7 @@ function renderCards(){
       <div class="cardhead">
         <div class="card-media">${media}</div>
         <div style="min-width:0;flex:1">
-          <p class="cardname">${esc(c.name)||'Carta sem nome'}</p>
+          <p class="cardname" data-name="${i}">${esc(c.name)||'Carta sem nome'}</p>
           <div class="code mono">${esc(c.code)||'sem código'}${c.variant?'-'+esc(c.variant):''}</div>
           <div class="chips">${chips.join('')}</div>
           ${c.effect?`<div class="hint" data-effect="${i}" style="margin-top:8px;max-width:52ch">${esc(c.effect.length>150?c.effect.slice(0,150)+'…':c.effect)}${c.effect.length>150?` <button class="btn ghost sm" data-readmore="${i}" style="padding:1px 8px;font-size:11px">Ler mais</button>`:''}</div>`:''}
@@ -937,6 +937,7 @@ function renderCards(){
         </div>
       </div>
       <div class="fields">
+        <div><label>Nome</label><input data-f="name" data-i="${i}" value="${esc(c.name)}" placeholder="Nome da carta"></div>
         <div><label>Código</label><input class="mono" data-f="code" data-i="${i}" value="${esc(c.code)}" placeholder="OP17-062"></div>
         <div><label>Variante</label><input class="mono" data-f="variant" data-i="${i}" value="${esc(c.variant)}" placeholder="AA, SA, MA"></div>
         <div><label>Estado</label><select data-f="estado" data-i="${i}">${['Mint','Near Mint','Excelente','Bom'].map(o=>`<option ${c.estado===o?'selected':''}>${o}</option>`).join('')}</select></div>
@@ -1204,6 +1205,12 @@ let tmr=null;
 $('#cards').addEventListener('input',e=>{
   const el=e.target,i=+el.dataset.i,f=el.dataset.f;
   if(el.dataset.i===undefined||!f)return;
+  if(f==='name'){
+    cards[i].name=el.value;
+    const nameEl=document.querySelector(`[data-name="${i}"]`);
+    if(nameEl)nameEl.textContent=el.value||'Carta sem nome';
+    return;
+  }
   if(f==='code'||f==='variant'){
     cards[i][f]=el.value;
     clearTimeout(tmr);tmr=setTimeout(()=>lookup(i),450);
