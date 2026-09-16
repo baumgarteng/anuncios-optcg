@@ -59,5 +59,7 @@ A API não devolve uma contagem exata de estoque no endpoint de busca em lote (s
 
 **Ajuste em 2026-09-16**: a busca inicial usava o nome da carta, então trazia TODAS as impressões daquele personagem em qualquer set (ex.: toda "Vinsmoke Reiju"). Corrigido pra buscar pelo código exato (`OP12-063`) e filtrar o resultado só às variantes daquele mesmo código. Cada resultado agora também busca `/v1/public/cards/{id}/prices` pra trazer o tipo do preço (anúncio ativo vs. última venda concluída), o nível de liquidez (baixa/média/alta, além da nota 0–100) e a lista de SKUs disponíveis — e o nome da carta virou link direto pra página dela em jornadagames.com.
 
+O primeiro filtro por código exato passou perto demais: a Jornada Games trata cada arte alternativa como um card à parte, mas com o mesmo código base + sufixo (ex.: `OP12-063` pra arte normal e `OP12-063-AA` pra "Alternate Art") — a comparação exata descartava a variante AA. Corrigido pra casar o código exato OU o código exato seguido de um sufixo (`-AA`, `-P1`, etc.), confirmado direto nos logs de produção com a Reiju (OP12-063): a busca já trazia as duas, só o filtro é que jogava uma fora.
+
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-16. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
