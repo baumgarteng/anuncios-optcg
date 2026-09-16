@@ -1468,8 +1468,9 @@ async function abrirJornadaGames(i){
     if(!itens.length){$('#jg-body').innerHTML='<div class="hint">Nenhuma variante encontrada na Jornada Games pra esse código.</div>';return;}
     const nivelPt={low:'baixa',medium:'média',high:'alta'};
     $('#jg-body').innerHTML=itens.map(it=>{
-      const liq=it.liquidez!=null?`${it.liquidez}/100`:'—';
-      const nivel=it.liquidezNivel?` (${nivelPt[it.liquidezNivel]||it.liquidezNivel})`:'';
+      const liqHTML=(it.liquidez!=null&&it.liquidez>0)
+        ?`<div class="hint" style="margin:0">Liquidez: ${it.liquidez}/100${it.liquidezNivel?` (${nivelPt[it.liquidezNivel]||it.liquidezNivel})`:''}</div>`
+        :'';
       const img=it.imageUrl?`<img src="${it.imageUrl}" alt="" style="width:40px;height:56px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border)">`:'';
       const nomeHTML=it.url
         ?`<a href="${it.url}" target="_blank" rel="noopener" style="font-weight:700;font-size:13.5px;color:var(--primary);text-decoration:none">${esc(it.name||'')} ↗</a>`
@@ -1479,9 +1480,7 @@ async function abrirJornadaGames(i){
         const partes=[];
         if(it.anuncios)partes.push(`${it.anuncios} anúncio(s)`);
         if(it.unidades)partes.push(`${it.unidades} unidade(s)`);
-        disp=`<div class="hint" style="margin:2px 0 0;color:var(--ok,#1a7f37)">Oferta ativa agora${partes.length?' · '+partes.join(' · '):''}</div>`;
-      }else if(it.disponivel===false){
-        disp='<div class="hint" style="margin:2px 0 0">Sem oferta ativa no momento</div>';
+        if(partes.length)disp=`<div class="hint" style="margin:2px 0 0;color:var(--ok,#1a7f37)">${partes.join(' · ')}</div>`;
       }
       return `<div class="row" style="align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
         ${img}
@@ -1492,10 +1491,10 @@ async function abrirJornadaGames(i){
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-weight:800">${it.preco!=null?brl(it.preco):'—'}</div>
-          <div class="hint" style="margin:0">Liquidez: ${liq}${nivel}</div>
+          ${liqHTML}
         </div>
       </div>`;
-    }).join('')+'<div class="hint" style="margin-top:8px">Liquidez (0–100) mede a atividade de negociação nos últimos 30 dias. Anúncios/unidades são contados a partir do book de ofertas de cada SKU (condição×idioma) da Jornada Games — só é calculado quando há oferta ativa. Clique no nome da carta pra abrir a página dela na Jornada Games.</div>';
+    }).join('');
   }catch(e){
     $('#jg-body').innerHTML='<div class="hint">Não consegui buscar na Jornada Games: '+esc(e.message)+'</div>';
   }
