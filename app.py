@@ -55,7 +55,13 @@ def _superfrete(path, body):
 def _superfrete_get(path):
     """GET autenticado na API da SuperFrete — só consulta, nunca gasta
     saldo. Usado pra checar o status real de um pedido já criado (ex.:
-    descobrir se foi cancelado depois por erro no endereço)."""
+    descobrir se foi cancelado depois por erro no endereço).
+
+    O path exato (GET /api/v0/orders/{order_id}) foi mapeado a partir do
+    pacote open-source deco-cx/apps/superfrete, não da doc oficial — por
+    isso o tratamento de erro aqui é generoso: se a resposta não vier em
+    JSON, mostra o corpo cru em vez de estourar um erro de parse opaco,
+    pra dar pista de qual é o formato/endpoint certo."""
     if not SUPERFRETE_TOKEN:
         raise RuntimeError("SUPERFRETE_TOKEN não configurado")
     req = urllib.request.Request(
@@ -63,15 +69,26 @@ def _superfrete_get(path):
         headers={
             "Authorization": "Bearer " + SUPERFRETE_TOKEN,
             "User-Agent": "AnunciosOPTCG/1.0 (gustavo.baumgarten@gmail.com)",
+            "Accept": "application/json",
         },
         method="GET",
     )
     try:
         with urllib.request.urlopen(req, timeout=25) as r:
-            return json.loads(r.read())
+            corpo = r.read()
     except urllib.error.HTTPError as e:
         detalhe = e.read().decode(errors="replace")
         raise RuntimeError(f"SuperFrete {e.code}: {detalhe[:300]}")
+    if not corpo:
+        raise RuntimeError(
+            "SuperFrete respondeu sem conteúdo — o endpoint de status pode não "
+            "existir nessa conta/plano ou exigir outra URL. Confirme em "
+            "https://superfrete.readme.io/reference qual é o endpoint certo."
+        )
+    try:
+        return json.loads(corpo)
+    except json.JSONDecodeError:
+        raise RuntimeError(f"SuperFrete não devolveu JSON, corpo recebido: {corpo[:300]!r}")
 
 
 app = Flask(__name__)
@@ -150,6 +167,18 @@ def init_db():
                 """UPDATE venda SET anuncio_ids = ARRAY[anuncio_id]
                     WHERE anuncio_id IS NOT NULL AND anuncio_ids = '{}'""")
             cur.execute("CREATE INDEX IF NOT EXISTS venda_anuncio_ids_idx ON venda USING GIN (anuncio_ids)")
+            # pagamento, datas e comprovante — item 7/9 do backlog.
+            cur.execute("ALTER TABLE venda ADD COLUMN IF NOT EXISTS forma_pagamento text")
+            cur.execute("ALTER TABLE venda ADD COLUMN IF NOT EXISTS pagamento_status text")
+            cur.execute("ALTER TABLE venda ADD COLUMN IF NOT EXISTS desconto numeric(10,2)")
+            cur.execute("ALTER TABLE venda ADD COLUMN IF NOT EXISTS observacao text")
+            cur.execute("ALTER TABLE venda ADD COLUMN IF NOT EXISTS data_venda date")
+            cur.execute("ALTER TABLE venda ADD COLUMN IF NOT EXISTS data_envio date")
+            cur.execute("ALTER TABLE venda ADD COLUMN IF NOT EXISTS data_recebimento date")
+            cur.execute("ALTER TABLE venda ADD COLUMN IF NOT EXISTS banco_recebimento text")
+            cur.execute("ALTER TABLE venda ADD COLUMN IF NOT EXISTS comprovante_envio text")
+            cur.execute(
+                "UPDATE venda SET data_venda = criado_em::date WHERE data_venda IS NULL")
             c.commit()
         app.logger.info("schema ok")
     except Exception as e:
@@ -910,6 +939,10 @@ def api_vendas_listar():
             v["criado_em"] = v["criado_em"].isoformat()
             v["preco_total"] = float(v["preco_total"] or 0)
             v["frete_valor"] = float(v["frete_valor"]) if v["frete_valor"] is not None else None
+            v["desconto"] = float(v["desconto"]) if v["desconto"] is not None else None
+            v["data_venda"] = v["data_venda"].isoformat() if v["data_venda"] else None
+            v["data_envio"] = v["data_envio"].isoformat() if v["data_envio"] else None
+            v["data_recebimento"] = v["data_recebimento"].isoformat() if v["data_recebimento"] else None
         indicadores = {
             "total_vendas": tot["n"],
             "receita_total": float(tot["receita"] or 0),
@@ -938,11 +971,16 @@ def api_vendas_criar():
         with conn() as c, c.cursor() as cur:
             cur.execute(
                 """INSERT INTO venda (anuncio_ids, origem, origem_detalhe, comprador, cards, preco_total,
-                                       frete_servico, frete_valor)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                                       frete_servico, frete_valor, forma_pagamento, pagamento_status,
+                                       desconto, observacao, data_venda, data_envio, data_recebimento,
+                                       banco_recebimento, comprovante_envio)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                 (anuncio_ids, b.get("origem") or "outro", b.get("origem_detalhe"), b.get("comprador"),
                  json.dumps(cards, ensure_ascii=False), preco,
-                 b.get("frete_servico"), b.get("frete_valor")))
+                 b.get("frete_servico"), b.get("frete_valor"), b.get("forma_pagamento"),
+                 b.get("pagamento_status"), b.get("desconto"), b.get("observacao"),
+                 b.get("data_venda") or datetime.date.today().isoformat(), b.get("data_envio"),
+                 b.get("data_recebimento"), b.get("banco_recebimento"), b.get("comprovante_envio")))
             vid = cur.fetchone()["id"]
             if anuncio_ids:
                 cur.execute(
@@ -957,7 +995,9 @@ def api_vendas_criar():
 def api_vendas_atualizar(vid):
     b = request.json or {}
     campos, valores = [], []
-    for campo in ("origem", "origem_detalhe", "comprador", "frete_servico"):
+    for campo in ("origem", "origem_detalhe", "comprador", "frete_servico", "forma_pagamento",
+                  "pagamento_status", "observacao", "data_venda", "data_envio", "data_recebimento",
+                  "banco_recebimento", "comprovante_envio"):
         if campo in b:
             campos.append(f"{campo}=%s")
             valores.append(b[campo])
@@ -970,6 +1010,9 @@ def api_vendas_atualizar(vid):
     if "frete_valor" in b:
         campos.append("frete_valor=%s")
         valores.append(b["frete_valor"])
+    if "desconto" in b:
+        campos.append("desconto=%s")
+        valores.append(b["desconto"])
     if "endereco" in b:
         campos.append("endereco=%s")
         valores.append(json.dumps(b["endereco"], ensure_ascii=False) if b["endereco"] else None)
