@@ -999,7 +999,11 @@ function renderCards(){
           <p class="cardname" data-name="${i}">${esc(c.name)||'Carta sem nome'}</p>
           <div class="code mono">${esc(c.code)||'sem código'}${c.variant?'-'+esc(c.variant):''}</div>
           <div class="chips">${chips.join('')}</div>
-          ${c.effect?`<div class="hint" data-effect="${i}" style="margin-top:8px;max-width:52ch">${esc(c.effect.length>150?c.effect.slice(0,150)+'…':c.effect)}${c.effect.length>150?` <button class="btn ghost sm" data-readmore="${i}" style="padding:1px 8px;font-size:11px">Ler mais</button>`:''}</div>`:''}
+          ${c.effect?`<button class="btn ghost sm" data-vereffect="${i}" style="margin-top:8px;padding:1px 8px;font-size:11px">Ver Efeito</button>
+          <div class="hint hide" data-effect="${i}" style="margin-top:8px;max-width:52ch">
+            <div data-effect-text="${i}">${esc(c.effect)}</div>
+            <button class="btn ghost sm" data-translate="${i}" style="margin-top:4px;padding:1px 8px;font-size:11px">Traduzir</button>
+          </div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0">
           <button class="btn ghost sm" data-detail="${i}">Ver carta</button>
@@ -1264,7 +1268,16 @@ $('#drop').addEventListener('drop',e=>addFiles(e.dataTransfer.files));
 document.addEventListener('paste',e=>{if(e.clipboardData&&e.clipboardData.files.length)addFiles(e.clipboardData.files);});
 $('#shots').addEventListener('click',e=>{
   const rm=e.target.closest('button[data-i]'),ed=e.target.closest('button[data-edit]');
-  if(rm){photos.splice(+rm.dataset.i,1);renderShots();if(cards.length)renderCards();return;}
+  if(rm){
+    const idx=+rm.dataset.i;
+    const temCarta=cards[idx]!==undefined;
+    if(!confirm(temCarta?'Remover esta foto? A carta correspondente também será removida do anúncio.':'Remover esta foto?'))return;
+    photos.splice(idx,1);
+    if(temCarta)cards.splice(idx,1);
+    if(!cards.length){limpar();return;}
+    renderShots();renderCards();
+    return;
+  }
   if(ed){openEditor({type:'photo',i:+ed.dataset.edit});}
 });
 $('#btn-id').onclick=identify;
@@ -1318,11 +1331,12 @@ $('#cards').addEventListener('click',e=>{
   const rf=e.target.closest('button[data-refresh]');
   const hs=e.target.closest('button[data-hist]');
   const jg=e.target.closest('button[data-jg]');
-  const rm2=e.target.closest('button[data-readmore]');
   const dt=e.target.closest('button[data-detail]');
   const va=e.target.closest('button[data-verso-add]');
   const ve=e.target.closest('button[data-verso-edit]');
   const vr=e.target.closest('button[data-verso-rm]');
+  const vef=e.target.closest('button[data-vereffect]');
+  const tr=e.target.closest('button[data-translate]');
   if(b){
     if(!confirm('Remover esta carta do anúncio?'))return;
     const idx=+b.dataset.rm;
@@ -1336,11 +1350,19 @@ $('#cards').addEventListener('click',e=>{
   if(rf)atualizarPreco(+rf.dataset.refresh);
   if(hs)abrirHistorico(+hs.dataset.hist);
   if(jg)abrirJornadaGames(+jg.dataset.jg);
-  if(rm2)lerMais(+rm2.dataset.readmore);
   if(dt)abrirDetalhe(+dt.dataset.detail);
   if(va){versoAlvo=+va.dataset.versoAdd;$('#file-verso').click();}
   if(ve)openEditor({type:'verso',i:+ve.dataset.versoEdit});
   if(vr){cards[+vr.dataset.versoRm].verso=null;renderCards();}
+  if(vef){
+    const idx=+vef.dataset.vereffect;
+    const painel=document.querySelector(`[data-effect="${idx}"]`);
+    if(painel){
+      const escondido=painel.classList.toggle('hide');
+      vef.textContent=escondido?'Ver Efeito':'Ocultar Efeito';
+    }
+  }
+  if(tr)traduzirEfeito(+tr.dataset.translate);
 });
 $('#file-verso').onchange=async e=>{
   const f=e.target.files[0];
@@ -1417,16 +1439,16 @@ $('#hist-copy').onclick=async()=>{
     toast('Gráfico copiado');
   }catch(e){showErr('Não consegui copiar o gráfico: '+e.message);}
 };
-async function lerMais(i){
-  const el=document.querySelector(`[data-effect="${i}"]`);
+async function traduzirEfeito(i){
+  const el=document.querySelector(`[data-effect-text="${i}"]`);
   if(!el)return;
-  const original=el.innerHTML;
+  const original=el.textContent;
   el.textContent='Traduzindo…';
   try{
     const d=await api('/api/traduzir',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({texto:cards[i].effect})});
     el.textContent=d.traduzido;
-  }catch(e){el.innerHTML=original;showErr('Não consegui traduzir: '+e.message);}
+  }catch(e){el.textContent=original;showErr('Não consegui traduzir: '+e.message);}
 }
 async function atualizarPreco(i,opts){
   opts=opts||{};
