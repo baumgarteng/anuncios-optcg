@@ -945,17 +945,17 @@ def api_jornadagames():
         return jsonify(erro=f"falha ao consultar Jornada Games: {e}"), 502
 
     achados = resultado.get("data") or []
-    print(f"[jg-debug] q={q!r} total_achados={len(achados)} "
-          f"codes={[c.get('code') for c in achados]}", flush=True)
-    if achados:
-        print(f"[jg-debug] primeiro item bruto: {json.dumps(achados[0])[:1500]}", flush=True)
     # se o termo parece um código de carta (ex.: OP12-063), restringe às
-    # variantes daquele MESMO código — a busca por texto às vezes traz outras
-    # impressões do mesmo personagem/nome em outros sets.
+    # variantes daquele MESMO código — a Jornada Games trata cada arte
+    # alternativa como um card à parte, mas com o código base + sufixo
+    # (ex.: "OP12-063" e "OP12-063-AA"), então casa o código exato OU
+    # o código exato seguido de um sufixo separado por hífen.
     if re.match(r"^[a-z]{1,4}\d{1,3}-\d{2,4}$", q, re.I):
         alvo = q.strip().upper()
-        filtrados = [c for c in achados if (c.get("code") or "").strip().upper() == alvo]
-        print(f"[jg-debug] filtro por código exato {alvo!r}: {len(filtrados)}/{len(achados)}", flush=True)
+        filtrados = [
+            c for c in achados
+            if (lambda cod: cod == alvo or cod.startswith(alvo + "-"))((c.get("code") or "").strip().upper())
+        ]
         if filtrados:
             achados = filtrados
 
@@ -981,7 +981,6 @@ def api_jornadagames():
             item["url"] = f"https://jornadagames.com/product/{pid}"
             try:
                 precos = _jg_get(f"/v1/public/cards/{pid}/prices")
-                print(f"[jg-debug] prices({pid}) bruto: {json.dumps(precos)[:1500]}", flush=True)
                 mercado = precos.get("market") or {}
                 preco_info = mercado.get("price") or {}
                 if preco_info.get("amountCents") is not None:
@@ -992,8 +991,8 @@ def api_jornadagames():
                     item["liquidez"] = liquidez_info.get("score")
                 item["liquidezNivel"] = liquidez_info.get("level")
                 item["skus"] = precos.get("skus") or []
-            except Exception as e:
-                print(f"[jg-debug] falha ao buscar prices({pid}): {e}", flush=True)
+            except Exception:
+                pass
         itens.append(item)
     return jsonify(itens=itens)
 
