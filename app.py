@@ -912,7 +912,8 @@ def api_jornadagames():
     anúncio nem em nada mais): busca pelo código exato da carta (ex.: OP12-063)
     pra trazer só as variantes daquela impressão — não outras cartas com o
     mesmo nome/personagem em outros sets — e enriquece cada uma com os dados
-    completos de mercado (preço, se tem oferta ativa agora, liquidez) via
+    completos de mercado (preço, se tem oferta ativa agora, liquidez e,
+    quando há oferta, quantos anúncios/unidades estão à venda) via
     /v1/public/cards/{id}/prices."""
     q = (request.args.get("q") or "").strip()
     if not q:
@@ -971,6 +972,8 @@ def api_jornadagames():
             "preco": (c["lowestPriceCents"] / 100) if c.get("lowestPriceCents") is not None else None,
             "precoTipo": None,
             "disponivel": None,  # None = não sabemos; True/False = tem ou não oferta ativa agora
+            "anuncios": None,  # nº de anúncios ativos (soma do orderCount de todos os SKUs)
+            "unidades": None,  # nº de unidades à venda agora (soma das quantidades)
             "liquidez": c.get("liquidityScore"),
             "liquidezNivel": None,
             "idiomas": c.get("offerLanguages") or [],
@@ -983,31 +986,35 @@ def api_jornadagames():
                 precos = _jg_get(f"/v1/public/cards/{pid}/prices")
                 mercado = precos.get("market") or {}
                 preco_info = mercado.get("price") or {}
-                if preco_info.get("amountCents") is not None:
-                    item["preco"] = preco_info["amountCents"] / 100
+                if preco_info.get("amount") is not None:
+                    item["preco"] = preco_info["amount"] / 100
                 item["precoTipo"] = preco_info.get("kind")
-                # "ask" = tem lance/oferta ativa agora (com preço e estoque real);
-                # "reference" ou nulo = não há ninguém vendendo no momento — a API
-                # não devolve uma contagem de unidades aqui (só no book de ofertas
-                # por SKU individual), então mostramos disponível/indisponível, não
-                # um número de "estoque" que induziria a erro.
                 item["disponivel"] = item["precoTipo"] == "ask"
                 liquidez_info = mercado.get("liquidity") or {}
                 if liquidez_info.get("score") is not None:
                     item["liquidez"] = liquidez_info.get("score")
                 item["liquidezNivel"] = liquidez_info.get("level")
+                # o /prices sem SKU não traz estoque — só dá pra saber quantos
+                # anúncios/unidades existem consultando o book de ofertas de
+                # cada SKU (condição×idioma) individualmente. Só vale a pena
+                # gastar essas chamadas quando já sabemos que há oferta ativa.
                 if item["disponivel"]:
-                    print(f"[jg-debug] prices({pid}) com oferta ativa, bruto: "
-                          f"{json.dumps(precos)[:2000]}", flush=True)
-                    skus = precos.get("skus") or []
-                    if skus:
-                        primeiro_sku = skus[0].get("id")
+                    total_anuncios = 0
+                    total_unidades = 0
+                    for sku in (precos.get("skus") or [])[:20]:
+                        sku_id = sku.get("id")
+                        if not sku_id:
+                            continue
                         try:
-                            detalhe_sku = _jg_get(f"/v1/public/cards/{pid}/prices", {"sku": primeiro_sku})
-                            print(f"[jg-debug] prices({pid}, sku={primeiro_sku}) bruto: "
-                                  f"{json.dumps(detalhe_sku)[:2000]}", flush=True)
-                        except Exception as e:
-                            print(f"[jg-debug] falha ao buscar sku {primeiro_sku}: {e}", flush=True)
+                            detalhe = _jg_get(f"/v1/public/cards/{pid}/prices", {"sku": sku_id})
+                            sell_orders = ((detalhe.get("skuDetail") or {}).get("orderBook") or {}).get("sellOrders") or []
+                            for o in sell_orders:
+                                total_anuncios += o.get("orderCount") or 0
+                                total_unidades += o.get("quantity") or 0
+                        except Exception:
+                            pass
+                    item["anuncios"] = total_anuncios
+                    item["unidades"] = total_unidades
             except Exception:
                 pass
         itens.append(item)
