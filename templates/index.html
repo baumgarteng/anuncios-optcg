@@ -489,6 +489,11 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
         <span class="hint" style="margin:0">Origem fixa: Joinville/SC 89201-405 · pacote padrão de 1 carta em sleeve</span>
       </div>
       <div id="frete-resultado" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <span class="hint" style="margin:0;font-weight:700">💰 Pix pra receber:</span>
+        <span class="hint mono" style="margin:0" id="pix-widget-info"></span>
+        <button class="btn ghost sm" id="btn-pix-widget">Copiar dados PIX</button>
+      </div>
     </div>
 
     <div class="seg" id="seg-salvos" style="margin-bottom:14px">
@@ -558,6 +563,7 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
             <option value="">—</option>
             <option>PAC</option><option>SEDEX</option><option>Mini Envios</option>
             <option>Jadlog</option><option>Loggi</option><option>J&T</option>
+            <option>Jornada Games</option>
           </select>
         </div>
       </div>
@@ -1884,11 +1890,14 @@ $('#v-end-cep').addEventListener('input',()=>{
   clearTimeout(tmrCep);
   tmrCep=setTimeout(buscarCep,400);
 });
-$('#v-copiar-pix').onclick=async()=>{
+async function copiarPix(){
   const texto=`Chave PIX: ${PIX_INFO.chave}\nBanco: ${PIX_INFO.banco}\nTitular: ${PIX_INFO.titular}`;
   try{await navigator.clipboard.writeText(texto);toast('Dados PIX copiados');}
   catch(e){showErr('O navegador bloqueou a cópia.');}
-};
+}
+$('#v-copiar-pix').onclick=copiarPix;
+$('#btn-pix-widget').onclick=copiarPix;
+$('#pix-widget-info').textContent=`${PIX_INFO.chave} (${PIX_INFO.banco})`;
 $('#btn-venda-externa').onclick=()=>abrirVendaModal(null);
 $('#v-cancel').onclick=()=>$('#venda-overlay').classList.add('hide');
 $('#v-salvar').onclick=async()=>{
