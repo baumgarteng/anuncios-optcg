@@ -61,5 +61,7 @@ A API não devolve uma contagem exata de estoque no endpoint de busca em lote (s
 
 O primeiro filtro por código exato passou perto demais: a Jornada Games trata cada arte alternativa como um card à parte, mas com o mesmo código base + sufixo (ex.: `OP12-063` pra arte normal e `OP12-063-AA` pra "Alternate Art") — a comparação exata descartava a variante AA. Corrigido pra casar o código exato OU o código exato seguido de um sufixo (`-AA`, `-P1`, etc.), confirmado direto nos logs de produção com a Reiju (OP12-063): a busca já trazia as duas, só o filtro é que jogava uma fora.
 
+O campo "N SKU(s) disponível(is)" também saiu errado — o `skus[]` do `/prices` é só a lista de combinações de condição×idioma que a Jornada Games rastreia (ex.: 12 = 6 condições × EN/JP), não uma contagem de estoque real; duas cartas sem nenhum vendedor mostravam "12 SKUs disponíveis" como se tivessem. Trocado por um indicador simples de "oferta ativa agora" / "sem oferta ativa no momento", baseado no `market.price.kind` ("ask" = tem alguém vendendo agora). A API não devolve uma contagem exata de unidades nessa consulta em lote — só no book de ofertas por SKU individual (uma chamada por SKU, cara demais pra fazer em lote aqui).
+
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-16. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
