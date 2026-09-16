@@ -537,6 +537,7 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
       <select id="v-origem">
         <option value="whatsapp_grupo">Grupo de WhatsApp</option>
         <option value="anuncio">Anúncio gerado aqui</option>
+        <option value="jornada_games">Jornada Games</option>
         <option value="outro">Outro</option>
       </select>
       <div id="v-grupo-wrap" style="margin-top:10px">
@@ -577,6 +578,46 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
           <div><label>Cidade</label><input id="v-end-cidade"></div>
           <div><label>UF</label><input id="v-end-uf" maxlength="2" style="text-transform:uppercase"></div>
           <div><label>E-mail (opcional)</label><input id="v-end-email"></div>
+        </div>
+      </details>
+
+      <details style="margin-top:14px" open>
+        <summary style="cursor:pointer;color:var(--muted-foreground);font-size:13px;font-weight:700">Pagamento e detalhes da venda</summary>
+        <div class="fields" style="margin-top:10px">
+          <div><label>Forma de pagamento</label>
+            <select id="v-pagamento-forma">
+              <option value="">—</option>
+              <option value="pix">PIX</option>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="cartao">Cartão</option>
+              <option value="transferencia">Transferência</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div><label>Status do pagamento</label>
+            <select id="v-pagamento-status">
+              <option value="">—</option>
+              <option value="pendente">Pendente</option>
+              <option value="recebido">Recebido</option>
+            </select>
+          </div>
+          <div><label>Desconto (R$)</label><input id="v-desconto" placeholder="0,00"></div>
+          <div><label>Data da venda</label><input type="date" id="v-data-venda"></div>
+          <div><label>Data de envio (Correios)</label><input type="date" id="v-data-envio"></div>
+          <div><label>Data do recebimento</label><input type="date" id="v-data-recebimento"></div>
+          <div><label>Banco/conta do recebimento</label><input id="v-banco-recebimento" placeholder="ex.: Nubank"></div>
+        </div>
+        <div style="margin-top:10px">
+          <label for="v-observacao">Observação da venda (opcional)</label>
+          <textarea id="v-observacao" placeholder="Ex.: cliente pediu desconto por pagar à vista"></textarea>
+        </div>
+        <div style="margin-top:10px">
+          <label>Comprovante de envio (opcional)</label>
+          <div id="v-comprovante-wrap"></div>
+          <input type="file" id="v-comprovante-file" accept="image/*" class="hide">
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn ghost sm" id="v-copiar-pix" type="button">Copiar dados PIX pra enviar</button>
         </div>
       </details>
     </div>
@@ -665,9 +706,11 @@ const FRASES_PADRAO=[
 ];
 
 let photos=[], cards=[], gen=null, mode='curto', saved=[], editandoId=null;
-let vendas=[], vendaIndicadores=null, vendaEditId=null, vendaAnuncioIds=[], vendaCartasTmp=[], freteOpcoes=[];
+let vendas=[], vendaIndicadores=null, vendaEditId=null, vendaAnuncioIds=[], vendaCartasTmp=[], freteOpcoes=[], vendaComprovante=null;
 let vendaSelecionados=new Set();
-const ORIGEM_LABEL={anuncio:'Anúncio', whatsapp_grupo:'Grupo WhatsApp', outro:'Outro'};
+const ORIGEM_LABEL={anuncio:'Anúncio', whatsapp_grupo:'Grupo WhatsApp', jornada_games:'Jornada Games', outro:'Outro'};
+const FORMA_PAGAMENTO_LABEL={pix:'PIX', dinheiro:'Dinheiro', cartao:'Cartão', transferencia:'Transferência', outro:'Outro'};
+const PIX_INFO={chave:'47999641711', banco:'Nubank', titular:'Gustavo Baumgarten'};
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
 const ICO_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
@@ -1264,10 +1307,11 @@ $('#cards').addEventListener('click',e=>{
   const ve=e.target.closest('button[data-verso-edit]');
   const vr=e.target.closest('button[data-verso-rm]');
   if(b){
+    if(!confirm('Remover esta carta do anúncio?'))return;
     const idx=+b.dataset.rm;
     cards.splice(idx,1);
     if(photos[idx]!==undefined)photos.splice(idx,1);
-    if(!cards.length)$('#cards-wrap').classList.add('hide');
+    if(!cards.length){limpar();return;}
     renderShots();
     renderCards();
     return;
@@ -1603,10 +1647,12 @@ async function carregarVendas(){
 function renderVendaIndicadores(){
   const ind=vendaIndicadores||{total_vendas:0,receita_total:0,ticket_medio:0,por_origem:[]};
   const chips=(ind.por_origem||[]).map(o=>`<span class="chip">${esc(ORIGEM_LABEL[o.origem]||o.origem)}: ${o.quantidade} · ${brl(o.receita)}</span>`).join(' ');
+  const aReceber=vendas.filter(v=>v.pagamento_status&&v.pagamento_status!=='recebido').reduce((s,v)=>s+Number(v.preco_total||0),0);
   $('#venda-indicadores').innerHTML=`
     <div class="stat-tile"><div class="stat-label">Receita total</div><div class="stat-value">${brl(ind.receita_total)}</div></div>
     <div class="stat-tile"><div class="stat-label">Vendas</div><div class="stat-value">${ind.total_vendas}</div></div>
     <div class="stat-tile"><div class="stat-label">Ticket médio</div><div class="stat-value">${brl(ind.ticket_medio)}</div></div>
+    ${aReceber>0?`<div class="stat-tile"><div class="stat-label">A receber</div><div class="stat-value">${brl(aReceber)}</div></div>`:''}
     ${chips?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${chips}</div>`:''}`;
 }
 function renderVendaChart(){
@@ -1615,7 +1661,7 @@ function renderVendaChart(){
   wrap.classList.remove('hide');
   const porDia={};
   vendas.forEach(v=>{
-    const dia=(v.criado_em||'').slice(0,10);
+    const dia=v.data_venda||(v.criado_em||'').slice(0,10);
     porDia[dia]=(porDia[dia]||0)+Number(v.preco_total||0);
   });
   const dias=Object.keys(porDia).sort();
@@ -1634,7 +1680,8 @@ function renderVendaChart(){
   const labels=dias.map((d,i)=>{
     if(i%passo!==0)return '';
     const x=padL+(i+0.5)*slot;
-    return `<text x="${x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="var(--muted-foreground)">${d.slice(5)}</text>`;
+    const [,mm,dd]=d.split('-');
+    return `<text x="${x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="var(--muted-foreground)">${dd}/${mm}</text>`;
   }).join('');
   wrap.innerHTML=`<div class="hint" style="margin-bottom:6px;font-weight:700">Receita por dia</div>
     <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">${bars}${labels}</svg>`;
@@ -1649,11 +1696,12 @@ function renderVendasList(){
     const imgVenda=cs.map(c=>c.image_url).find(Boolean)||v.capa_anuncio;
     const thumbVenda=imgVenda?`<img class="sv-thumb" src="${imgVenda}" alt="">`
       :`<div class="sv-thumb" style="display:flex;align-items:center;justify-content:center">${ICO_CARD}</div>`;
+    const dataVenda=v.data_venda?new Date(v.data_venda+'T00:00:00'):new Date(v.criado_em);
     return `<div class="sv-row">
       ${thumbVenda}
       <div class="sv-info">
-        <div class="sv-name">${esc(nome)}</div>
-        <div class="sv-meta mono">${esc(origemTxt)}${v.comprador?' · '+esc(v.comprador):''} · ${brl(v.preco_total)} · ${new Date(v.criado_em).toLocaleDateString('pt-BR')}</div>
+        <div class="sv-name">${esc(nome)}${v.pagamento_status?` <span class="chip ${v.pagamento_status==='recebido'?'ok':'warn'}">${v.pagamento_status}</span>`:''}</div>
+        <div class="sv-meta mono">${esc(origemTxt)}${v.comprador?' · '+esc(v.comprador):''} · ${brl(v.preco_total)} · ${dataVenda.toLocaleDateString('pt-BR')}${v.forma_pagamento?' · '+esc(FORMA_PAGAMENTO_LABEL[v.forma_pagamento]||v.forma_pagamento):''}</div>
       </div>
       <div class="sv-actions">
         <button class="btn ghost sm" data-editar-venda="${v.id}">Editar</button>
@@ -1755,6 +1803,7 @@ $('#v-cartas').addEventListener('input',e=>{
 $('#v-cartas').addEventListener('click',e=>{
   const b=e.target.closest('button[data-rm-carta]');
   if(!b)return;
+  if(!confirm('Remover esta carta da venda?'))return;
   vendaCartasTmp.splice(+b.dataset.rmCarta,1);
   renderVendaCartas();
 });
@@ -1783,8 +1832,36 @@ function abrirVendaModal(venda,anuncioIds){
   $('#v-end-complemento').value=end.complemento||'';$('#v-end-bairro').value=end.bairro||'';
   $('#v-end-cidade').value=end.cidade||'';$('#v-end-uf').value=end.uf||'';$('#v-end-email').value=end.email||'';
   $('#v-cep-status').textContent='';
+  $('#v-pagamento-forma').value=(venda&&venda.forma_pagamento)||'';
+  $('#v-pagamento-status').value=(venda&&venda.pagamento_status)||'';
+  $('#v-desconto').value=(venda&&venda.desconto!=null)?venda.desconto:'';
+  $('#v-data-venda').value=(venda&&venda.data_venda)||new Date().toISOString().slice(0,10);
+  $('#v-data-envio').value=(venda&&venda.data_envio)||'';
+  $('#v-data-recebimento').value=(venda&&venda.data_recebimento)||'';
+  $('#v-banco-recebimento').value=(venda&&venda.banco_recebimento)||'';
+  $('#v-observacao').value=(venda&&venda.observacao)||'';
+  vendaComprovante=(venda&&venda.comprovante_envio)||null;
+  renderComprovante();
   $('#venda-overlay').classList.remove('hide');
 }
+function renderComprovante(){
+  $('#v-comprovante-wrap').innerHTML=vendaComprovante
+    ?`<div class="shot" style="width:70px;height:70px">
+        <img src="${vendaComprovante}" alt="" style="object-fit:contain;background:var(--muted)">
+        <div class="btns"><button class="rm" id="v-comprovante-rm" title="Remover">&times;</button></div>
+      </div>`
+    :`<button class="btn ghost sm" id="v-comprovante-add" type="button">+ Anexar comprovante</button>`;
+}
+$('#v-comprovante-wrap').addEventListener('click',e=>{
+  if(e.target.id==='v-comprovante-add')$('#v-comprovante-file').click();
+  if(e.target.closest('#v-comprovante-rm')){vendaComprovante=null;renderComprovante();}
+});
+$('#v-comprovante-file').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';
+  if(!f)return;
+  try{vendaComprovante=await resize(f,1400,.85);renderComprovante();}
+  catch(err){showErr('Não consegui ler o comprovante.');}
+};
 async function buscarCep(){
   const cep=$('#v-end-cep').value.replace(/\D/g,'');
   const status=$('#v-cep-status');
@@ -1808,6 +1885,11 @@ $('#v-end-cep').addEventListener('input',()=>{
   clearTimeout(tmrCep);
   tmrCep=setTimeout(buscarCep,400);
 });
+$('#v-copiar-pix').onclick=async()=>{
+  const texto=`Chave PIX: ${PIX_INFO.chave}\nBanco: ${PIX_INFO.banco}\nTitular: ${PIX_INFO.titular}`;
+  try{await navigator.clipboard.writeText(texto);toast('Dados PIX copiados');}
+  catch(e){showErr('O navegador bloqueou a cópia.');}
+};
 $('#btn-venda-externa').onclick=()=>abrirVendaModal(null);
 $('#v-cancel').onclick=()=>$('#venda-overlay').classList.add('hide');
 $('#v-salvar').onclick=async()=>{
@@ -1830,6 +1912,15 @@ $('#v-salvar').onclick=async()=>{
     frete_valor:$('#v-frete-valor').value?Number($('#v-frete-valor').value.replace(',','.')):null,
     frete_servico:$('#v-frete-servico').value||null,
     endereco:temEndereco?endereco:null,
+    forma_pagamento:$('#v-pagamento-forma').value||null,
+    pagamento_status:$('#v-pagamento-status').value||null,
+    desconto:$('#v-desconto').value?Number($('#v-desconto').value.replace(',','.')):null,
+    data_venda:$('#v-data-venda').value||null,
+    data_envio:$('#v-data-envio').value||null,
+    data_recebimento:$('#v-data-recebimento').value||null,
+    banco_recebimento:$('#v-banco-recebimento').value.trim()||null,
+    observacao:$('#v-observacao').value.trim()||null,
+    comprovante_envio:vendaComprovante,
   };
   try{
     if(vendaEditId){
