@@ -674,6 +674,16 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
   </div>
 </div>
 
+<div class="editor-overlay hide" id="jg-overlay">
+  <div class="editor-panel" style="max-width:480px">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>JornadaGames — só referência</h3>
+    <div id="jg-body"></div>
+    <div class="editor-actions">
+      <button class="btn ghost sm" id="jg-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <div class="editor-overlay hide" id="zoom-overlay" style="z-index:300;padding:0;cursor:zoom-out">
   <img id="zoom-img" style="max-width:96vw;max-height:96vh;object-fit:contain;border-radius:6px" alt="">
 </div>
@@ -929,7 +939,8 @@ function pctAtual(c){
 
 function hintHTML(i){
   const c=cards[i];
-  if(!c.liga)return 'Sem preço de referência da Liga para esta carta';
+  const jgBtn=`<button class="btn ghost sm" data-jg="${i}">JornadaGames</button>`;
+  if(!c.liga)return `Sem preço de referência da Liga para esta carta<div class="mini-actions">${jgBtn}</div>`;
   const diff=pctAtual(c);
   const atualizado=c.liga.atualizado?new Date(c.liga.atualizado).toLocaleDateString('pt-BR'):null;
   const precoTxt=c.liga.preco!=null
@@ -949,13 +960,12 @@ function hintHTML(i){
       estoqueTxt=`<br>🏪 ${c.liga.lojas} loja${c.liga.lojas>1?'s':''} vendendo agora${unidades}`;
     }
   }
-  const acoes=c.liga.url
-    ?`<div class="mini-actions">
-        <button class="btn ghost sm" data-refresh="${i}">Atualizar</button>
+  const acoes=`<div class="mini-actions">
+      ${c.liga.url?`<button class="btn ghost sm" data-refresh="${i}">Atualizar</button>
         <button class="btn ghost sm" data-hist="${i}">Histórico</button>
-        <a class="btn ghost sm" href="${c.liga.url}" target="_blank" rel="noopener">Ver na Liga</a>
-      </div>`
-    :'';
+        <a class="btn ghost sm" href="${c.liga.url}" target="_blank" rel="noopener">Ver na Liga</a>`:''}
+      ${jgBtn}
+    </div>`;
   return linha+estoqueTxt+acoes;
 }
 function updateCardHint(i){
@@ -1307,6 +1317,7 @@ $('#cards').addEventListener('click',e=>{
   const b=e.target.closest('button[data-rm]');
   const rf=e.target.closest('button[data-refresh]');
   const hs=e.target.closest('button[data-hist]');
+  const jg=e.target.closest('button[data-jg]');
   const rm2=e.target.closest('button[data-readmore]');
   const dt=e.target.closest('button[data-detail]');
   const va=e.target.closest('button[data-verso-add]');
@@ -1324,6 +1335,7 @@ $('#cards').addEventListener('click',e=>{
   }
   if(rf)atualizarPreco(+rf.dataset.refresh);
   if(hs)abrirHistorico(+hs.dataset.hist);
+  if(jg)abrirJornadaGames(+jg.dataset.jg);
   if(rm2)lerMais(+rm2.dataset.readmore);
   if(dt)abrirDetalhe(+dt.dataset.detail);
   if(va){versoAlvo=+va.dataset.versoAdd;$('#file-verso').click();}
@@ -1444,6 +1456,36 @@ async function abrirHistorico(i){
   }
 }
 $('#hist-close').onclick=()=>$('#hist-overlay').classList.add('hide');
+async function abrirJornadaGames(i){
+  const c=cards[i];
+  const q=(c.name||c.code||'').trim();
+  if(!q)return;
+  $('#jg-overlay').classList.remove('hide');
+  $('#jg-body').innerHTML='<div class="status"><svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a10 10 0 1 0 10 10"/></svg><span>Buscando na Jornada Games…</span></div>';
+  try{
+    const d=await api('/api/jornadagames?q='+encodeURIComponent(q));
+    const itens=d.itens||[];
+    if(!itens.length){$('#jg-body').innerHTML='<div class="hint">Nenhuma carta encontrada na Jornada Games pra esse nome/código.</div>';return;}
+    $('#jg-body').innerHTML=itens.map(it=>{
+      const liq=it.liquidez!=null?`${it.liquidez}/100`:'—';
+      const img=it.imageUrl?`<img src="${it.imageUrl}" alt="" style="width:40px;height:56px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border)">`:'';
+      return `<div class="row" style="align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        ${img}
+        <div style="min-width:0;flex:1">
+          <div style="font-weight:700;font-size:13.5px">${esc(it.name||'')}</div>
+          <div class="hint mono" style="margin:2px 0 0">${esc(it.code||'')}${it.setCode?' · '+esc(it.setCode):''}${it.rarity?' · '+esc(it.rarity):''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-weight:800">${it.preco!=null?brl(it.preco):'—'}</div>
+          <div class="hint" style="margin:0">Liquidez: ${liq}</div>
+        </div>
+      </div>`;
+    }).join('')+'<div class="hint" style="margin-top:8px">Liquidez (0–100) mede a atividade de negociação nos últimos 30 dias — é o indicador de "estoque"/demanda que a busca em lote da Jornada Games oferece; não é uma contagem exata de unidades.</div>';
+  }catch(e){
+    $('#jg-body').innerHTML='<div class="hint">Não consegui buscar na Jornada Games: '+esc(e.message)+'</div>';
+  }
+}
+$('#jg-close').onclick=()=>$('#jg-overlay').classList.add('hide');
 function mostrarPontoHist(circ){
   const tip=$('#hist-tooltip');
   const p=histPts[+circ.dataset.idx];

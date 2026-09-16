@@ -14,6 +14,8 @@ MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 OPTCG_LIVE_URL = os.environ.get("OPTCG_LIVE_URL", "https://optcg-cloud-v2.onrender.com")
 SUPERFRETE_TOKEN = os.environ.get("SUPERFRETE_TOKEN", "")
 SUPERFRETE_BASE = os.environ.get("SUPERFRETE_BASE", "https://api.superfrete.com")
+JORNADAGAMES_API_KEY = os.environ.get("JORNADAGAMES_API_KEY", "")
+JORNADAGAMES_BASE = os.environ.get("JORNADAGAMES_BASE", "https://api.jornadagames.com")
 
 # endereço fixo de origem (remetente) — sempre o mesmo, informado pelo usuário
 ORIGEM_ENDERECO = {
@@ -902,6 +904,47 @@ def api_cep(cep):
         cidade=d.get("localidade") or "",
         uf=d.get("uf") or "",
     )
+
+
+@app.get("/api/jornadagames")
+def api_jornadagames():
+    """Busca só de REFERÊNCIA na Jornada Games (não interfere no preço do
+    anúncio nem em nada mais): procura o nome/código da carta e devolve
+    preço + liquidez de cada variante encontrada. Usa /v1/public/cards/search
+    porque já traz lowestPriceCents e liquidityScore em lote (a própria doc
+    recomenda essa rota pra evitar N chamadas ao endpoint de preço)."""
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify(erro="informe o nome ou código da carta"), 400
+    if not JORNADAGAMES_API_KEY:
+        return jsonify(erro="JORNADAGAMES_API_KEY não configurada"), 502
+    try:
+        qs = urllib.parse.urlencode({"q": q, "game": "one-piece-tcg", "kind": "single", "limit": 20})
+        req = urllib.request.Request(
+            f"{JORNADAGAMES_BASE.rstrip('/')}/v1/public/cards/search?{qs}",
+            headers={"Authorization": f"Bearer {JORNADAGAMES_API_KEY}"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=20) as r:
+            resultado = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        detalhe = e.read().decode(errors="replace")
+        return jsonify(erro=f"Jornada Games {e.code}: {detalhe[:300]}"), 502
+    except Exception as e:
+        return jsonify(erro=f"falha ao consultar Jornada Games: {e}"), 502
+
+    itens = [{
+        "id": c.get("id"),
+        "code": c.get("code"),
+        "name": c.get("name"),
+        "rarity": c.get("rarity"),
+        "setCode": c.get("setCode"),
+        "imageUrl": c.get("imageUrl"),
+        "preco": (c["lowestPriceCents"] / 100) if c.get("lowestPriceCents") is not None else None,
+        "liquidez": c.get("liquidityScore"),
+        "idiomas": c.get("offerLanguages") or [],
+    } for c in (resultado.get("data") or [])]
+    return jsonify(itens=itens)
 
 
 @app.post("/api/frete/calcular")
