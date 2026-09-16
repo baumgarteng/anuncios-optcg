@@ -52,5 +52,10 @@ Testado com uma venda real: `GET /api/vendas/<id>/etiqueta/status` devolveu "Exp
 ## ~~14. Guardar o preço da Liga da época do anúncio pra comparar com a venda~~ ✅ feito em 2026-09-16
 `anuncio.cards[i].liga` (preço/mínimo/máximo da Liga no momento do anúncio) já era salvo automaticamente — confirmado direto no banco. O que faltava: essa referência era descartada quando a carta virava uma venda (tanto no botão "Vendida" quanto em "Gerar venda com selecionadas" e no salvamento final do modal). Agora `venda.cards[i].liga` carrega a mesma referência congelada da época do anúncio, e o modal de venda mostra, por carta, o preço/mínimo da Liga na época e quanto % o preço de venda ficou acima/abaixo disso.
 
+## ~~15. Conectar com a Jornada Games como referência de preço~~ ✅ feito em 2026-09-16
+Chave de API (`JORNADAGAMES_API_KEY`) guardada como variável de ambiente no serviço, nunca no código. Botão "JornadaGames" junto de Atualizar/Histórico/Ver na Liga em cada carta: busca o nome/código na API pública deles (`GET /v1/public/cards/search`, restrito a `game=one-piece-tcg`) e mostra num modal o preço e a liquidez de cada variante encontrada. É só referência — não altera o preço do anúncio nem qualquer outro cálculo.
+
+A API não devolve uma contagem exata de estoque no endpoint de busca em lote (só no book de ofertas por SKU individual, mais caro — a doc deles recomenda a busca em lote justamente pra evitar isso). Por isso, ao lado do preço, mostramos `liquidityScore` (0–100, atividade de negociação em 30 dias) rotulado como "Liquidez" — é o indicador mais próximo de "estoque" disponível numa consulta só, mas não é uma contagem literal de unidades.
+
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-16. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
