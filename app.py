@@ -275,7 +275,8 @@ def buscar_carta(code, variant=""):
         cur.execute(
             """SELECT m.catalog_id, m.liga_code, m.liga_price, m.liga_preco_min, m.liga_preco_max,
                       m.liga_suffix, m.liga_page_url, m.liga_image_url, m.updated_at,
-                      s.store_count, s.total_stock, s.checked_at AS estoque_checado_em
+                      s.price AS snapshot_price, s.store_count, s.total_stock,
+                      s.checked_at AS estoque_checado_em
                  FROM liga_catalog_map m
                  LEFT JOIN liga_price_snapshot s ON s.liga_url = m.liga_page_url
                 WHERE m.base_code = %s AND m.liga_page_url IS NOT NULL
@@ -341,6 +342,21 @@ def buscar_carta(code, variant=""):
         except Exception:
             return [x for x in re.split(r"[,\[\]\"]+", v) if x.strip()]
 
+    # liga_catalog_map.liga_price é um cache que nem sempre foi atualizado
+    # de novo depois do mapeamento inicial; liga_price_snapshot.price é o
+    # valor do scraper AO VIVO (mais recente e com mais cobertura pra
+    # variantes específicas como AA). Nunca divergem quando os dois
+    # existem — então prefere sempre o snapshot, e cai pro valor do map
+    # só quando o snapshot ainda não tem nada pra essa variante.
+    preco_liga = atualizado_liga = None
+    if ref:
+        if ref["snapshot_price"] is not None:
+            preco_liga, atualizado_liga = float(ref["snapshot_price"]), ref["estoque_checado_em"]
+        elif ref["liga_price"] is not None:
+            preco_liga, atualizado_liga = float(ref["liga_price"]), ref["updated_at"]
+        else:
+            atualizado_liga = ref["updated_at"]
+
     return {
         "code": base,
         "variant": variant,
@@ -357,13 +373,13 @@ def buscar_carta(code, variant=""):
         "image_url": imagem,
         "completo": bool(carta["rarity"]),
         "liga": None if not ref else {
-            "preco": float(ref["liga_price"]) if ref["liga_price"] is not None else None,
+            "preco": preco_liga,
             "min": float(ref["liga_preco_min"]) if ref["liga_preco_min"] else None,
             "max": float(ref["liga_preco_max"]) if ref["liga_preco_max"] else None,
             "catalog_id": ref["catalog_id"],
             "codigo": ref["liga_code"],
             "url": ref["liga_page_url"],
-            "atualizado": ref["updated_at"].isoformat() if ref["updated_at"] else None,
+            "atualizado": atualizado_liga.isoformat() if atualizado_liga else None,
             "lojas": ref["store_count"],
             "estoque_total": ref["total_stock"],
             "estoque_atualizado": ref["estoque_checado_em"].isoformat() if ref["estoque_checado_em"] else None,

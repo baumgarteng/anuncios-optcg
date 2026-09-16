@@ -36,7 +36,7 @@ O snapshot `cards` da venda agora carrega `image_url` (tanto vindo do fluxo "Ven
 - **Como foi pago** e **onde foi pago/banco** (`banco_recebimento`) — cobertos junto do item 7.
 
 ## ~~10. Salvar anúncio por carta + juntar cartas de vários anúncios numa venda~~ ✅ feito em 2026-09-15
-Um anúncio com várias cartas continua gerando UM texto (o post completo, pra colar no WhatsApp), mas ao salvar agora cria **uma linha em `anuncio` por carta** (cada uma com o mesmo texto e um `lote_id` em comum, só pra indicar na lista "parte de um lote de N"). Isso permite marcar/vender cada carta do post separadamente.
+Um anúncio com várias cartas continua gerando UM texto (o post completo, pra colar no WhatsApp), mas ao salvar agora cria **uma linha em `anuncio` por carta** (cada uma com o mesmo texto e um `lote_id` em comum — guardado, mas sem selo visual na lista; removido a pedido em 2026-09-16). Isso permite marcar/vender cada carta do post separadamente.
 
 Na aba Anúncios, cada linha ganhou um checkbox e um botão "Gerar venda com selecionadas": dá pra marcar cartas de anúncios diferentes (de lotes diferentes até) e gerar **uma venda só**, com um comprador e um frete cobrindo todas. `venda.anuncio_ids` (array, substituiu o `anuncio_id` singular) guarda todos os anúncios ligados — excluir a venda desfaz o status `vendida` de todos eles.
 
@@ -45,6 +45,9 @@ Uma vez que `etiqueta_url` era gravado, a tela só mostrava "Ver etiqueta" pra s
 
 ## 12. [bug em aberto] "Verificar status" retorna erro de parse
 Testado com uma venda real: `GET /api/vendas/<id>/etiqueta/status` devolveu "Expecting value: line 1 column 1 (char 0)" — a SuperFrete respondeu sem corpo (ou não-JSON) pro endpoint `GET /api/v0/orders/{order_id}`, que foi mapeado a partir do pacote `deco-cx/apps/superfrete` (comunidade, não é doc oficial — não consegui confirmar contra https://superfrete.readme.io/reference, bloqueado pra mim nesta sessão). O tratamento de erro no backend foi melhorado (mostra o corpo cru da resposta em vez de estourar o erro de parse), mas o endpoint em si ainda pode estar errado — próximo teste do botão "Verificar status" deve trazer uma mensagem mais útil (corpo da resposta) pra descobrir o path certo.
+
+## ~~13. [bug] Preço da Liga mostrando "sem preço em cache" com preço disponível~~ ✅ feito em 2026-09-16
+`buscar_carta()` só lia `liga_catalog_map.liga_price` (atualizado uma vez no mapeamento inicial, raramente de novo) e ignorava `liga_price_snapshot.price` (valor do scraper ao vivo, mais recente e com mais cobertura pra variantes específicas). Confirmado direto no banco (`optcg-db`): 157 cartas tinham `liga_price` nulo mas já tinham preço no snapshot — nos dois casos onde ambos existem, nunca divergem, só o snapshot é mais completo. Corrigido: agora prefere sempre `liga_price_snapshot.price` (com a data de checagem certa), e só cai pro valor do `liga_catalog_map` quando o snapshot ainda não tem nada.
 
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-16. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*

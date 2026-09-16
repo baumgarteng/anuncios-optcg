@@ -1119,12 +1119,11 @@ function renderSaved(){
     const accent=(cs[0]&&cs[0].colors&&cs[0].colors[0]&&COLORS[cs[0].colors[0]])||'var(--primary)';
     const thumb=a.capa?`<img class="sv-thumb" src="${a.capa}" alt="">`
       :`<div class="sv-thumb" style="display:flex;align-items:center;justify-content:center">${ICO_CARD}</div>`;
-    const loteBadge=a.lote_tamanho>1?` <span class="chip" title="Salva junto com outras ${a.lote_tamanho-1} carta(s) do mesmo anúncio">lote de ${a.lote_tamanho}</span>`:'';
     return `<div class="sv-row" style="--accent:${accent}">
       <input type="checkbox" class="sv-check" data-check="${a.id}" ${vendaSelecionados.has(a.id)?'checked':''} style="width:auto;flex-shrink:0">
       ${thumb}
       <div class="sv-info">
-        <div class="sv-name">${esc(nome)}${loteBadge}</div>
+        <div class="sv-name">${esc(nome)}</div>
         <div class="sv-meta mono">${esc(cod)} · ${brl(a.total)} · ${new Date(a.criado_em).toLocaleDateString('pt-BR')}</div>
       </div>
       <div class="sv-actions">
