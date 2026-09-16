@@ -524,6 +524,7 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
         <button class="btn" id="btn-venda-externa">+ Registrar venda externa</button>
       </div>
       <div class="panel hide" id="venda-chart-wrap" style="margin-bottom:16px"></div>
+      <div id="venda-chart-tooltip" class="hide" style="position:fixed;pointer-events:none;background:var(--ink);color:#fff;padding:5px 9px;border-radius:6px;font-size:11.5px;line-height:1.4;white-space:nowrap;transform:translate(-50%,-115%);z-index:10;box-shadow:0 4px 10px rgba(0,0,0,.25)"></div>
       <div class="saved-list" id="vendas-list"></div>
       <div class="empty hide" id="vendas-empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
@@ -1660,6 +1661,7 @@ function renderVendaIndicadores(){
     ${aReceber>0?`<div class="stat-tile"><div class="stat-label">A receber</div><div class="stat-value">${brl(aReceber)}</div></div>`:''}
     ${chips?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${chips}</div>`:''}`;
 }
+let vendaChartPts=[];
 function renderVendaChart(){
   const wrap=$('#venda-chart-wrap');
   if(!vendas.length){wrap.classList.add('hide');wrap.innerHTML='';return;}
@@ -1670,27 +1672,66 @@ function renderVendaChart(){
     porDia[dia]=(porDia[dia]||0)+Number(v.preco_total||0);
   });
   const dias=Object.keys(porDia).sort();
+  vendaChartPts=dias.map(d=>({dia:d,valor:porDia[d]}));
+  const total=dias.reduce((s,d)=>s+porDia[d],0);
+  const media=total/dias.length;
   const max=Math.max(...dias.map(d=>porDia[d]),1);
-  const w=600,h=170,padL=52,padR=12,padT=12,padB=22;
+  const w=600,h=210,padL=66,padR=12,padT=14,padB=26;
   const plotW=w-padL-padR,plotH=h-padT-padB;
   const slot=plotW/dias.length;
   const barW=Math.min(28,slot*.6);
+  const yAt=v=>padT+plotH-(v/max)*plotH;
+  const niveis=[0,max/2,max];
+  const grid=niveis.map(v=>{
+    const y=yAt(v).toFixed(1);
+    return `<line x1="${padL}" y1="${y}" x2="${w-padR}" y2="${y}" stroke="var(--border)" stroke-width="1"/>
+      <text x="${padL-8}" y="${Number(y)+3}" text-anchor="end" font-size="9.5" fill="var(--muted-foreground)" style="font-variant-numeric:tabular-nums">${brl(v).replace('R$ ','')}</text>`;
+  }).join('');
+  const mediaY=yAt(media).toFixed(1);
+  const linhaMedia=dias.length>1?`<line x1="${padL}" y1="${mediaY}" x2="${w-padR}" y2="${mediaY}" stroke="var(--muted-foreground)" stroke-width="1" stroke-dasharray="3,3" opacity=".7"/>`:'';
   const bars=dias.map((d,i)=>{
     const x=padL+(i+0.5)*slot-barW/2;
     const bh=(porDia[d]/max)*plotH;
     const y=padT+plotH-bh;
-    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(bh,1).toFixed(1)}" rx="3" fill="var(--primary)"/>`;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(bh,1).toFixed(1)}" rx="3" fill="var(--primary)" style="pointer-events:none"/>`;
+  }).join('');
+  const hits=dias.map((d,i)=>{
+    const x=padL+i*slot;
+    return `<rect x="${x.toFixed(1)}" y="${padT}" width="${slot.toFixed(1)}" height="${plotH}" fill="transparent" data-idx="${i}" style="cursor:pointer"/>`;
   }).join('');
   const passo=Math.max(1,Math.ceil(dias.length/8));
   const labels=dias.map((d,i)=>{
     if(i%passo!==0)return '';
     const x=padL+(i+0.5)*slot;
     const [,mm,dd]=d.split('-');
-    return `<text x="${x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="var(--muted-foreground)">${dd}/${mm}</text>`;
+    return `<text x="${x.toFixed(1)}" y="${h-8}" text-anchor="middle" font-size="9" fill="var(--muted-foreground)">${dd}/${mm}</text>`;
   }).join('');
-  wrap.innerHTML=`<div class="hint" style="margin-bottom:6px;font-weight:700">Receita por dia</div>
-    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">${bars}${labels}</svg>`;
+  wrap.innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <div class="hint" style="margin:0;font-weight:700">Receita por dia</div>
+      <div class="hint" style="margin:0">Total: <b>${brl(total)}</b> · Média/dia: <b>${brl(media)}</b></div>
+    </div>
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">${grid}${linhaMedia}${bars}${hits}${labels}</svg>`;
 }
+function mostrarPontoVenda(rect){
+  const tip=$('#venda-chart-tooltip');
+  const p=vendaChartPts[+rect.dataset.idx];
+  if(!p){tip.classList.add('hide');return;}
+  const [y,m,d]=p.dia.split('-');
+  tip.innerHTML=`${d}/${m}/${y}<br><b>${brl(p.valor)}</b>`;
+  tip.classList.remove('hide');
+  const cr=rect.getBoundingClientRect();
+  tip.style.left=(cr.left+cr.width/2)+'px';
+  tip.style.top=cr.top+'px';
+}
+$('#venda-chart-wrap').addEventListener('pointermove',e=>{
+  const r=e.target.closest('rect[data-idx]');
+  if(r)mostrarPontoVenda(r);else $('#venda-chart-tooltip').classList.add('hide');
+});
+$('#venda-chart-wrap').addEventListener('pointerdown',e=>{
+  const r=e.target.closest('rect[data-idx]');
+  if(r)mostrarPontoVenda(r);
+});
+$('#venda-chart-wrap').addEventListener('pointerleave',()=>$('#venda-chart-tooltip').classList.add('hide'));
 function renderVendasList(){
   $('#vendas-empty').classList.toggle('hide',vendas.length>0);
   $('#vendas-list').innerHTML=vendas.map(v=>{
