@@ -49,5 +49,8 @@ Testado com uma venda real: `GET /api/vendas/<id>/etiqueta/status` devolveu "Exp
 ## ~~13. [bug] Preço da Liga mostrando "sem preço em cache" com preço disponível~~ ✅ feito em 2026-09-16
 `buscar_carta()` só lia `liga_catalog_map.liga_price` (atualizado uma vez no mapeamento inicial, raramente de novo) e ignorava `liga_price_snapshot.price` (valor do scraper ao vivo, mais recente e com mais cobertura pra variantes específicas). Confirmado direto no banco (`optcg-db`): 157 cartas tinham `liga_price` nulo mas já tinham preço no snapshot — nos dois casos onde ambos existem, nunca divergem, só o snapshot é mais completo. Corrigido: agora prefere sempre `liga_price_snapshot.price` (com a data de checagem certa), e só cai pro valor do `liga_catalog_map` quando o snapshot ainda não tem nada.
 
+## ~~14. Guardar o preço da Liga da época do anúncio pra comparar com a venda~~ ✅ feito em 2026-09-16
+`anuncio.cards[i].liga` (preço/mínimo/máximo da Liga no momento do anúncio) já era salvo automaticamente — confirmado direto no banco. O que faltava: essa referência era descartada quando a carta virava uma venda (tanto no botão "Vendida" quanto em "Gerar venda com selecionadas" e no salvamento final do modal). Agora `venda.cards[i].liga` carrega a mesma referência congelada da época do anúncio, e o modal de venda mostra, por carta, o preço/mínimo da Liga na época e quanto % o preço de venda ficou acima/abaixo disso.
+
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-16. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*

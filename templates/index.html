@@ -1565,6 +1565,7 @@ $('#saved').addEventListener('click',async e=>{
     const cartas=(ad.cards||[]).map(c=>({
       nome:c.name||'', codigo:(c.code||'')+(c.variant?'-'+c.variant:''),
       preco:c.preco??'', quantidade:c.quantidade||1, image_url:c.image_url||null,
+      liga:c.liga||null,
     }));
     abrirVendaModal({origem:'whatsapp_grupo',cards:cartas},[ad.id]);
   }
@@ -1588,6 +1589,7 @@ $('#btn-venda-lote').onclick=()=>{
   const cartas=escolhidos.flatMap(ad=>(ad.cards||[]).map(c=>({
     nome:c.name||'', codigo:(c.code||'')+(c.variant?'-'+c.variant:''),
     preco:c.preco??'', quantidade:c.quantidade||1, image_url:c.image_url||null,
+    liga:c.liga||null,
   })));
   abrirVendaModal({origem:'whatsapp_grupo',cards:cartas},ids);
 };
@@ -1831,12 +1833,25 @@ $('#superfrete-body').addEventListener('click',async e=>{
 
 /* ---------- modal registrar/editar venda ---------- */
 function vendaCartaRowHTML(c,i){
+  let ligaHint='';
+  if(c.liga&&(c.liga.preco!=null||c.liga.min!=null)){
+    const base=c.liga.min!=null?c.liga.min:c.liga.preco;
+    const p=Number(c.preco);
+    let diffTxt='';
+    if(base&&p){
+      const diff=Math.round((1-p/base)*100);
+      if(diff>0)diffTxt=` — <b>${diff}% abaixo</b> do mínimo da época`;
+      else if(diff<0)diffTxt=` — <b>${-diff}% acima</b> do mínimo da época`;
+      else diffTxt=' — igual ao mínimo da época';
+    }
+    ligaHint=`<div class="hint" style="margin:-2px 0 8px">Liga quando anunciada: <b>${brl(c.liga.preco)}</b>${c.liga.min!=null?` · mín. ${brl(c.liga.min)}`:''}${diffTxt}</div>`;
+  }
   return `<div class="fields" data-carta-row="${i}" style="margin-bottom:8px">
     <div><label>Nome</label><input data-vc="nome" value="${esc(c.nome||'')}"></div>
     <div><label>Código</label><input class="mono" data-vc="codigo" value="${esc(c.codigo||'')}"></div>
     <div><label>Preço (R$)</label><input data-vc="preco" value="${c.preco??''}"></div>
     <div><label>Qtd</label><input type="number" min="1" data-vc="quantidade" value="${c.quantidade||1}"></div>
-  </div>${vendaCartasTmp.length>1?`<button class="btn danger sm" data-rm-carta="${i}" style="margin-bottom:10px">Remover carta</button>`:''}`;
+  </div>${ligaHint}${vendaCartasTmp.length>1?`<button class="btn danger sm" data-rm-carta="${i}" style="margin-bottom:10px">Remover carta</button>`:''}`;
 }
 function renderVendaCartas(){
   $('#v-cartas').innerHTML=vendaCartasTmp.map((c,i)=>vendaCartaRowHTML(c,i)).join('');
@@ -1944,7 +1959,7 @@ $('#v-cancel').onclick=()=>$('#venda-overlay').classList.add('hide');
 $('#v-salvar').onclick=async()=>{
   const cartas=vendaCartasTmp.filter(c=>c.nome||c.codigo).map(c=>({
     nome:c.nome,codigo:c.codigo,preco:Number(String(c.preco).replace(',','.'))||0,quantidade:Number(c.quantidade)||1,
-    image_url:c.image_url||null
+    image_url:c.image_url||null, liga:c.liga||null
   }));
   const endereco={
     nome:$('#v-end-nome').value.trim(),cpf:$('#v-end-cpf').value.replace(/\D/g,''),cep:$('#v-end-cep').value.replace(/\D/g,''),
