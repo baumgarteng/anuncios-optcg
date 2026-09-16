@@ -922,7 +922,11 @@ def api_jornadagames():
         qs = urllib.parse.urlencode({"q": q, "game": "one-piece-tcg", "kind": "single", "limit": 20})
         req = urllib.request.Request(
             f"{JORNADAGAMES_BASE.rstrip('/')}/v1/public/cards/search?{qs}",
-            headers={"Authorization": f"Bearer {JORNADAGAMES_API_KEY}"},
+            headers={
+                "Authorization": f"Bearer {JORNADAGAMES_API_KEY}",
+                "User-Agent": "AnunciosOPTCG/1.0 (gustavo.baumgarten@gmail.com)",
+                "Accept": "application/json",
+            },
             method="GET",
         )
         with urllib.request.urlopen(req, timeout=20) as r:
