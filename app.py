@@ -909,45 +909,86 @@ def api_cep(cep):
 @app.get("/api/jornadagames")
 def api_jornadagames():
     """Busca só de REFERÊNCIA na Jornada Games (não interfere no preço do
-    anúncio nem em nada mais): procura o nome/código da carta e devolve
-    preço + liquidez de cada variante encontrada. Usa /v1/public/cards/search
-    porque já traz lowestPriceCents e liquidityScore em lote (a própria doc
-    recomenda essa rota pra evitar N chamadas ao endpoint de preço)."""
+    anúncio nem em nada mais): busca pelo código exato da carta (ex.: OP12-063)
+    pra trazer só as variantes daquela impressão — não outras cartas com o
+    mesmo nome/personagem em outros sets — e enriquece cada uma com os dados
+    completos de mercado (preço, se é lance ativo ou última venda, liquidez,
+    SKUs disponíveis) via /v1/public/cards/{id}/prices."""
     q = (request.args.get("q") or "").strip()
     if not q:
-        return jsonify(erro="informe o nome ou código da carta"), 400
+        return jsonify(erro="informe o código da carta"), 400
     if not JORNADAGAMES_API_KEY:
         return jsonify(erro="JORNADAGAMES_API_KEY não configurada"), 502
-    try:
-        qs = urllib.parse.urlencode({"q": q, "game": "one-piece-tcg", "kind": "single", "limit": 20})
+
+    headers = {
+        "Authorization": f"Bearer {JORNADAGAMES_API_KEY}",
+        "User-Agent": "AnunciosOPTCG/1.0 (gustavo.baumgarten@gmail.com)",
+        "Accept": "application/json",
+    }
+
+    def _jg_get(path, params=None):
+        qs = ("?" + urllib.parse.urlencode(params)) if params else ""
         req = urllib.request.Request(
-            f"{JORNADAGAMES_BASE.rstrip('/')}/v1/public/cards/search?{qs}",
-            headers={
-                "Authorization": f"Bearer {JORNADAGAMES_API_KEY}",
-                "User-Agent": "AnunciosOPTCG/1.0 (gustavo.baumgarten@gmail.com)",
-                "Accept": "application/json",
-            },
-            method="GET",
+            f"{JORNADAGAMES_BASE.rstrip('/')}{path}{qs}", headers=headers, method="GET"
         )
         with urllib.request.urlopen(req, timeout=20) as r:
-            resultado = json.loads(r.read())
+            return json.loads(r.read())
+
+    try:
+        resultado = _jg_get("/v1/public/cards/search", {
+            "q": q, "game": "one-piece-tcg", "kind": "single", "limit": 30,
+        })
     except urllib.error.HTTPError as e:
         detalhe = e.read().decode(errors="replace")
         return jsonify(erro=f"Jornada Games {e.code}: {detalhe[:300]}"), 502
     except Exception as e:
         return jsonify(erro=f"falha ao consultar Jornada Games: {e}"), 502
 
-    itens = [{
-        "id": c.get("id"),
-        "code": c.get("code"),
-        "name": c.get("name"),
-        "rarity": c.get("rarity"),
-        "setCode": c.get("setCode"),
-        "imageUrl": c.get("imageUrl"),
-        "preco": (c["lowestPriceCents"] / 100) if c.get("lowestPriceCents") is not None else None,
-        "liquidez": c.get("liquidityScore"),
-        "idiomas": c.get("offerLanguages") or [],
-    } for c in (resultado.get("data") or [])]
+    achados = resultado.get("data") or []
+    # se o termo parece um código de carta (ex.: OP12-063), restringe às
+    # variantes daquele MESMO código — a busca por texto às vezes traz outras
+    # impressões do mesmo personagem/nome em outros sets.
+    if re.match(r"^[a-z]{1,4}\d{1,3}-\d{2,4}$", q, re.I):
+        alvo = q.strip().upper()
+        filtrados = [c for c in achados if (c.get("code") or "").strip().upper() == alvo]
+        if filtrados:
+            achados = filtrados
+
+    itens = []
+    for c in achados[:15]:
+        item = {
+            "id": c.get("id"),
+            "code": c.get("code"),
+            "name": c.get("name"),
+            "rarity": c.get("rarity"),
+            "setCode": c.get("setCode"),
+            "imageUrl": c.get("imageUrl"),
+            "preco": (c["lowestPriceCents"] / 100) if c.get("lowestPriceCents") is not None else None,
+            "precoTipo": None,
+            "liquidez": c.get("liquidityScore"),
+            "liquidezNivel": None,
+            "skus": [],
+            "idiomas": c.get("offerLanguages") or [],
+            "url": None,
+        }
+        pid = c.get("publicId") or c.get("id")
+        if pid:
+            item["url"] = f"https://jornadagames.com/product/{pid}"
+            try:
+                precos = _jg_get(f"/v1/public/cards/{pid}/prices")
+                mercado = precos.get("market") or {}
+                preco_info = mercado.get("price") or {}
+                if preco_info.get("amountCents") is not None:
+                    item["preco"] = preco_info["amountCents"] / 100
+                item["precoTipo"] = preco_info.get("kind")
+                liquidez_info = mercado.get("liquidity") or {}
+                if liquidez_info.get("score") is not None:
+                    item["liquidez"] = liquidez_info.get("score")
+                item["liquidezNivel"] = liquidez_info.get("level")
+                item["skus"] = precos.get("skus") or []
+            except Exception:
+                pass
+        itens.append(item)
     return jsonify(itens=itens)
 
 

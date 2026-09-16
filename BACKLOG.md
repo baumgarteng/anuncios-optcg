@@ -57,5 +57,7 @@ Chave de API (`JORNADAGAMES_API_KEY`) guardada como variável de ambiente no ser
 
 A API não devolve uma contagem exata de estoque no endpoint de busca em lote (só no book de ofertas por SKU individual, mais caro — a doc deles recomenda a busca em lote justamente pra evitar isso). Por isso, ao lado do preço, mostramos `liquidityScore` (0–100, atividade de negociação em 30 dias) rotulado como "Liquidez" — é o indicador mais próximo de "estoque" disponível numa consulta só, mas não é uma contagem literal de unidades.
 
+**Ajuste em 2026-09-16**: a busca inicial usava o nome da carta, então trazia TODAS as impressões daquele personagem em qualquer set (ex.: toda "Vinsmoke Reiju"). Corrigido pra buscar pelo código exato (`OP12-063`) e filtrar o resultado só às variantes daquele mesmo código. Cada resultado agora também busca `/v1/public/cards/{id}/prices` pra trazer o tipo do preço (anúncio ativo vs. última venda concluída), o nível de liquidez (baixa/média/alta, além da nota 0–100) e a lista de SKUs disponíveis — e o nome da carta virou link direto pra página dela em jornadagames.com.
+
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-16. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
