@@ -996,6 +996,18 @@ def api_jornadagames():
                 if liquidez_info.get("score") is not None:
                     item["liquidez"] = liquidez_info.get("score")
                 item["liquidezNivel"] = liquidez_info.get("level")
+                if item["disponivel"]:
+                    print(f"[jg-debug] prices({pid}) com oferta ativa, bruto: "
+                          f"{json.dumps(precos)[:2000]}", flush=True)
+                    skus = precos.get("skus") or []
+                    if skus:
+                        primeiro_sku = skus[0].get("id")
+                        try:
+                            detalhe_sku = _jg_get(f"/v1/public/cards/{pid}/prices", {"sku": primeiro_sku})
+                            print(f"[jg-debug] prices({pid}, sku={primeiro_sku}) bruto: "
+                                  f"{json.dumps(detalhe_sku)[:2000]}", flush=True)
+                        except Exception as e:
+                            print(f"[jg-debug] falha ao buscar sku {primeiro_sku}: {e}", flush=True)
             except Exception:
                 pass
         itens.append(item)
