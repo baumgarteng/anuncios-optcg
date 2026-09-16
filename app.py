@@ -912,8 +912,8 @@ def api_jornadagames():
     anúncio nem em nada mais): busca pelo código exato da carta (ex.: OP12-063)
     pra trazer só as variantes daquela impressão — não outras cartas com o
     mesmo nome/personagem em outros sets — e enriquece cada uma com os dados
-    completos de mercado (preço, se é lance ativo ou última venda, liquidez,
-    SKUs disponíveis) via /v1/public/cards/{id}/prices."""
+    completos de mercado (preço, se tem oferta ativa agora, liquidez) via
+    /v1/public/cards/{id}/prices."""
     q = (request.args.get("q") or "").strip()
     if not q:
         return jsonify(erro="informe o código da carta"), 400
@@ -970,9 +970,9 @@ def api_jornadagames():
             "imageUrl": c.get("imageUrl"),
             "preco": (c["lowestPriceCents"] / 100) if c.get("lowestPriceCents") is not None else None,
             "precoTipo": None,
+            "disponivel": None,  # None = não sabemos; True/False = tem ou não oferta ativa agora
             "liquidez": c.get("liquidityScore"),
             "liquidezNivel": None,
-            "skus": [],
             "idiomas": c.get("offerLanguages") or [],
             "url": None,
         }
@@ -986,11 +986,16 @@ def api_jornadagames():
                 if preco_info.get("amountCents") is not None:
                     item["preco"] = preco_info["amountCents"] / 100
                 item["precoTipo"] = preco_info.get("kind")
+                # "ask" = tem lance/oferta ativa agora (com preço e estoque real);
+                # "reference" ou nulo = não há ninguém vendendo no momento — a API
+                # não devolve uma contagem de unidades aqui (só no book de ofertas
+                # por SKU individual), então mostramos disponível/indisponível, não
+                # um número de "estoque" que induziria a erro.
+                item["disponivel"] = item["precoTipo"] == "ask"
                 liquidez_info = mercado.get("liquidity") or {}
                 if liquidez_info.get("score") is not None:
                     item["liquidez"] = liquidez_info.get("score")
                 item["liquidezNivel"] = liquidez_info.get("level")
-                item["skus"] = precos.get("skus") or []
             except Exception:
                 pass
         itens.append(item)
