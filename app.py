@@ -1,4 +1,4 @@
-import os, json, base64, re, datetime, uuid
+import os, json, base64, re, datetime, uuid, secrets
 import psycopg
 from psycopg.rows import dict_row
 import urllib.request
@@ -143,6 +143,19 @@ CREATE TABLE IF NOT EXISTS venda (
 );
 CREATE INDEX IF NOT EXISTS venda_criado_idx ON venda (criado_em DESC);
 CREATE INDEX IF NOT EXISTS venda_anuncio_idx ON venda (anuncio_id);
+CREATE TABLE IF NOT EXISTS binder (
+  id        bigserial PRIMARY KEY,
+  token     text UNIQUE NOT NULL,
+  kind      text NOT NULL,
+  titulo    text,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS binder_all_unico ON binder (kind) WHERE kind = 'all';
+CREATE TABLE IF NOT EXISTS binder_item (
+  binder_id  bigint NOT NULL REFERENCES binder(id) ON DELETE CASCADE,
+  anuncio_id bigint NOT NULL REFERENCES anuncio(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS binder_item_binder_idx ON binder_item (binder_id);
 """
 
 
@@ -181,6 +194,10 @@ def init_db():
             cur.execute("ALTER TABLE venda ADD COLUMN IF NOT EXISTS comprovante_envio text")
             cur.execute(
                 "UPDATE venda SET data_venda = criado_em::date WHERE data_venda IS NULL")
+            # data da última alteração de conteúdo (preço/texto/imagens) de cada anúncio —
+            # usada pelo binder digital pra mostrar "atualizado em" por carta e no geral.
+            # DEFAULT now() preenche as linhas existentes na hora da migração.
+            cur.execute("ALTER TABLE anuncio ADD COLUMN IF NOT EXISTS atualizado_em timestamptz NOT NULL DEFAULT now()")
             c.commit()
         app.logger.info("schema ok")
     except Exception as e:
@@ -831,7 +848,7 @@ def api_anuncio_atualizar(aid):
         with conn() as c, c.cursor() as cur:
             cur.execute(
                 """UPDATE anuncio SET titulo=%s, texto_curto=%s, texto_completo=%s, observacao=%s,
-                          total=%s, cards=%s WHERE id=%s""",
+                          total=%s, cards=%s, atualizado_em=now() WHERE id=%s""",
                 (b.get("titulo"), b.get("curto"), b.get("completo"), b.get("observacao"),
                  total, json.dumps(cards, ensure_ascii=False), aid))
             cur.execute("DELETE FROM anuncio_imagem WHERE anuncio_id = %s", (aid,))
@@ -1304,6 +1321,132 @@ def api_vendas_etiqueta_resetar(vid):
         return jsonify(ok=True)
     except Exception as e:
         return jsonify(erro=str(e)), 500
+
+
+# ---------------------------------------------------------------- binder digital
+def _binder_cartas(anuncio_ids=None):
+    """Lista achatada das cartas dos anúncios ATIVOS (todos, ou só os ids dados),
+    lendo direto do jsonb `cards` — sem tabela própria de cartas. Devolve também
+    a data de atualização mais recente entre os anúncios incluídos (usada como
+    "atualizado em" geral do binder — sempre ao vivo, nunca congelada)."""
+    with conn() as c, c.cursor() as cur:
+        if anuncio_ids is None:
+            cur.execute(
+                "SELECT id, cards, atualizado_em FROM anuncio WHERE status != 'vendida' ORDER BY criado_em DESC")
+        else:
+            cur.execute(
+                """SELECT id, cards, atualizado_em FROM anuncio
+                    WHERE id = ANY(%s) AND status != 'vendida'""",
+                (anuncio_ids,))
+        rows = cur.fetchall()
+
+    cartas, atualizado_geral = [], None
+    for r in rows:
+        att = r["atualizado_em"]
+        if att and (atualizado_geral is None or att > atualizado_geral):
+            atualizado_geral = att
+        for card in (r["cards"] or []):
+            cartas.append({
+                "anuncio_id": r["id"],
+                "code": card.get("code") or "",
+                "variant": card.get("variant") or "",
+                "name": card.get("name") or "",
+                "estado": card.get("estado") or "Mint",
+                "preco": float(card.get("preco") or 0),
+                "quantidade": int(card.get("quantidade") or 1),
+                "image_url": card.get("image_url"),
+                "atualizado_em": att.isoformat() if att else None,
+            })
+    return cartas, (atualizado_geral.isoformat() if atualizado_geral else None)
+
+
+@app.post("/api/binders")
+def api_binder_criar():
+    b = request.json or {}
+    kind = b.get("kind")
+    if kind not in ("all", "custom"):
+        return jsonify(erro="kind precisa ser 'all' ou 'custom'"), 400
+    titulo = (b.get("titulo") or "").strip() or None
+    try:
+        ids = [int(i) for i in (b.get("anuncio_ids") or [])] if kind == "custom" else []
+    except (TypeError, ValueError):
+        return jsonify(erro="anuncio_ids inválido"), 400
+    if kind == "custom" and not ids:
+        return jsonify(erro="selecione ao menos um anúncio"), 400
+    try:
+        with conn() as c, c.cursor() as cur:
+            if kind == "all":
+                # link fixo e permanente — reaproveita o mesmo token sempre que
+                # existir, nunca gera um segundo binder "de todos".
+                cur.execute("SELECT id, token FROM binder WHERE kind = 'all'")
+                existente = cur.fetchone()
+                if existente:
+                    return jsonify(id=existente["id"], token=existente["token"])
+            token = secrets.token_urlsafe(18)
+            cur.execute(
+                "INSERT INTO binder (token, kind, titulo) VALUES (%s,%s,%s) RETURNING id",
+                (token, kind, titulo))
+            bid = cur.fetchone()["id"]
+            for aid in ids:
+                cur.execute(
+                    "INSERT INTO binder_item (binder_id, anuncio_id) VALUES (%s,%s)", (bid, aid))
+            c.commit()
+        return jsonify(id=bid, token=token)
+    except Exception as e:
+        return jsonify(erro=str(e)), 500
+
+
+@app.get("/api/binders")
+def api_binders_listar():
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute(
+                """SELECT b.id, b.token, b.kind, b.titulo, b.criado_em,
+                          (SELECT count(*) FROM binder_item i WHERE i.binder_id = b.id) AS n_itens
+                     FROM binder b ORDER BY b.criado_em DESC""")
+            rows = cur.fetchall()
+        for r in rows:
+            r["criado_em"] = r["criado_em"].isoformat()
+        return jsonify(binders=rows)
+    except Exception as e:
+        return jsonify(erro=str(e)), 500
+
+
+@app.delete("/api/binders/<int:bid>")
+def api_binder_excluir(bid):
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute("DELETE FROM binder WHERE id = %s", (bid,))
+            c.commit()
+        return jsonify(ok=True)
+    except Exception as e:
+        return jsonify(erro=str(e)), 500
+
+
+@app.get("/binder/<token>")
+def binder_publico(token):
+    """Página pública (sem login) do binder — token não adivinhável na URL
+    é a única proteção, igual ao link de etiqueta dos Correios."""
+    try:
+        with conn() as c, c.cursor() as cur:
+            cur.execute("SELECT id, kind, titulo FROM binder WHERE token = %s", (token,))
+            bnd = cur.fetchone()
+            if not bnd:
+                return render_template("binder_404.html"), 404
+            ids = None
+            if bnd["kind"] == "custom":
+                cur.execute(
+                    "SELECT anuncio_id FROM binder_item WHERE binder_id = %s", (bnd["id"],))
+                ids = [row["anuncio_id"] for row in cur.fetchall()]
+        cartas, atualizado_geral = _binder_cartas(ids)
+    except Exception as e:
+        return render_template("binder_404.html", erro=str(e)), 500
+    return render_template(
+        "binder_publico.html",
+        titulo=bnd["titulo"] or "Cartas à venda",
+        cartas=cartas,
+        atualizado_geral=atualizado_geral,
+    )
 
 
 init_db()

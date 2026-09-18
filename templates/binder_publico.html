@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ titulo }} — One Piece TCG</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,600&family=JetBrains+Mono:wght@500;700&display=swap');
+
+:root{
+  --background:#eef8fc;--foreground:#16232f;--card:#ffffff;--card-2:#f3fbfd;
+  --secondary:#fff6dc;--secondary-foreground:#7a5c12;--muted:#eaf6fa;--muted-foreground:#5c7183;
+  --border:#dbeef5;--border-strong:#b9e2ee;--primary:#ff4438;--primary-lit:#ff6b5e;
+  --primary-foreground:#ffffff;--straw:#ffc93c;--straw-lit:#ffdd7a;--success:#1fb572;
+  --success-bg:#e3faf0;--ink:#1c2b3a;--sea:#1ea7e0;--sea-lit:#6cd0f5;--radius:18px;
+  --shadow-tint:20,110,150;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:
+    radial-gradient(1100px 480px at -5% -15%, rgba(255,201,60,.32), transparent 60%),
+    radial-gradient(1200px 620px at 105% -10%, rgba(30,167,224,.26), transparent 55%),
+    linear-gradient(180deg, var(--background) 0%, #fbfdfe 45%, #ffffff 100%);
+  background-attachment:fixed;
+  color:var(--foreground);font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+  font-size:15px;line-height:1.5;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.ribbon{height:5px;background:linear-gradient(90deg,var(--sea),var(--straw) 50%,var(--primary))}
+
+.top{max-width:1100px;margin:0 auto;padding:26px 18px 6px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.mark{
+  width:44px;height:44px;border-radius:50%;flex-shrink:0;
+  background:radial-gradient(circle at 32% 28%, var(--straw-lit), var(--straw) 60%, #e0a415 100%);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 0 4px #fff, 0 6px 16px -4px rgba(255,201,60,.55);
+}
+.mark svg{width:26px;height:26px}
+.title-stack{min-width:0}
+h1{
+  font-family:'Cinzel',serif;font-size:24px;font-weight:900;letter-spacing:.01em;margin:0 0 3px;
+  background:linear-gradient(120deg,var(--primary),var(--primary-lit) 60%,var(--straw));
+  -webkit-background-clip:text;background-clip:text;color:transparent;text-wrap:pretty;
+}
+.top .sub{color:var(--muted-foreground);font-size:13px;font-weight:600}
+.top .sub b{color:var(--foreground);font-variant-numeric:tabular-nums}
+
+.wrap{max-width:1100px;margin:0 auto;padding:16px 18px 60px;position:relative;z-index:2}
+
+.controls{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px 14px;margin-bottom:18px;
+  box-shadow:0 1px 0 rgba(255,255,255,.8) inset, 0 12px 26px -22px rgba(var(--shadow-tint),.4);
+}
+.ctl-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ctl-label{font-size:11px;font-weight:800;color:var(--secondary-foreground);text-transform:uppercase;letter-spacing:.04em}
+.seg{display:inline-flex;border:0;border-radius:999px;padding:3px;background:var(--muted)}
+.seg button{
+  background:transparent;border:0;color:var(--muted-foreground);padding:6px 13px;font-size:13px;
+  font-weight:700;cursor:pointer;border-radius:999px;transition:background .2s,color .2s;font-family:inherit;
+}
+.seg button[aria-pressed="true"]{background:var(--primary);color:var(--primary-foreground);box-shadow:0 4px 12px -4px rgba(255,68,56,.5)}
+select{
+  background:var(--input,#fff);border:1.5px solid var(--border);border-radius:11px;color:var(--foreground);
+  padding:8px 12px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;
+}
+select:focus{outline:none;border-color:var(--sea)}
+
+.bgrid{display:grid;gap:16px}
+.bgrid[data-cols="2"]{grid-template-columns:repeat(2,1fr)}
+.bgrid[data-cols="3"]{grid-template-columns:repeat(3,1fr)}
+.bgrid[data-cols="4"]{grid-template-columns:repeat(4,1fr)}
+@media(max-width:640px){
+  .bgrid[data-cols="3"],.bgrid[data-cols="4"]{grid-template-columns:repeat(2,1fr)}
+  .top{padding-top:20px}
+  h1{font-size:20px}
+}
+
+.tile{
+  background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;
+  display:flex;flex-direction:column;transition:box-shadow .25s ease,transform .25s cubic-bezier(.34,1.56,.64,1);
+  animation:riseIn .4s cubic-bezier(.16,1,.3,1) both;
+}
+.tile:hover{box-shadow:0 18px 34px -22px rgba(var(--shadow-tint),.45);transform:translateY(-2px)}
+@keyframes riseIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.tile-media{position:relative;aspect-ratio:63/88;background:var(--muted);overflow:hidden}
+.tile-media img{width:100%;height:100%;object-fit:cover;display:block}
+.tile-media .ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--border-strong)}
+.tile-media .ph svg{width:34%;height:34%}
+.tile-price{
+  position:absolute;left:8px;bottom:8px;background:rgba(22,35,47,.82);color:#fff;font-weight:800;
+  font-size:.78em;padding:4px 9px;border-radius:999px;font-variant-numeric:tabular-nums;backdrop-filter:blur(2px);
+}
+.tile-qty{
+  position:absolute;right:8px;top:8px;background:var(--straw);color:var(--ink);font-weight:800;
+  font-size:.72em;padding:3px 8px;border-radius:999px;
+}
+.tile-body{padding:10px 12px 12px;flex:1;display:flex;flex-direction:column;gap:4px}
+.tile-name{font-weight:800;font-size:14px;line-height:1.28;text-wrap:pretty}
+.tile-code{font-size:11.5px;color:var(--primary);font-weight:700;font-variant-numeric:tabular-nums}
+.tile-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:auto;padding-top:6px}
+.tile-chip{
+  font-size:10.5px;padding:2px 7px;border-radius:6px;background:var(--muted);color:var(--foreground);
+  font-weight:700;text-transform:uppercase;letter-spacing:.02em;
+}
+.tile-updated{font-size:10.5px;color:var(--muted-foreground);white-space:nowrap;font-variant-numeric:tabular-nums}
+
+.empty{
+  text-align:center;color:var(--muted-foreground);padding:60px 20px;background:var(--card);
+  border:1px solid var(--border);border-radius:16px;
+}
+.empty svg{width:34px;height:34px;color:var(--border-strong);margin-bottom:10px}
+
+.foot{text-align:center;color:var(--muted-foreground);font-size:12px;margin-top:36px}
+
+@media(max-width:420px){
+  .tile-name{font-size:12.5px}
+  .tile-price{font-size:.72em;padding:3px 7px}
+  .tile-chip,.tile-updated{font-size:9.5px}
+}
+</style>
+
+<div class="ribbon"></div>
+<div class="top">
+  <div class="mark">
+    <svg viewBox="0 0 24 24">
+      <ellipse cx="12" cy="17.3" rx="10.2" ry="2.6" fill="var(--ink)"/>
+      <path d="M6.4 17 C6.4 9.6 8.8 4 12 4 C15.2 4 17.6 9.6 17.6 17 Z" fill="var(--ink)"/>
+      <rect x="6.8" y="13" width="10.4" height="2.3" rx="1.1" fill="var(--primary)"/>
+    </svg>
+  </div>
+  <div class="title-stack">
+    <h1>{{ titulo }}</h1>
+    <span class="sub"><b id="total-cartas">0</b> carta(s) à venda <span id="sub-atualizado"></span></span>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="controls">
+    <div class="ctl-group">
+      <span class="ctl-label">Visualização</span>
+      <div class="seg" id="seg-cols">
+        <button data-cols="2" aria-pressed="false">2×2</button>
+        <button data-cols="3" aria-pressed="true">3×3</button>
+        <button data-cols="4" aria-pressed="false">4×4</button>
+      </div>
+    </div>
+    <div class="ctl-group">
+      <span class="ctl-label">Ordenar</span>
+      <select id="ordenar">
+        <option value="recente">Mais recentes</option>
+        <option value="nome">Nome (A-Z)</option>
+        <option value="preco_asc">Menor preço</option>
+        <option value="preco_desc">Maior preço</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="bgrid" id="grid" data-cols="3"></div>
+
+  <div class="empty hide" id="empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l3-4h12l3 4M3 7v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7M3 7h18M9 11a3 3 0 0 0 6 0"/></svg>
+    <p>Nenhuma carta disponível neste binder no momento.</p>
+  </div>
+
+  <div class="foot">Catálogo gerado automaticamente · preços e disponibilidade podem mudar</div>
+</div>
+
+<script>
+const CARTAS = {{ cartas | tojson }};
+const ATUALIZADO_GERAL = {{ atualizado_geral | tojson }};
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const ICO_CARD='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><circle cx="7.5" cy="6.5" r=".6" fill="currentColor" stroke="none"/></svg>';
+
+function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+function brl(n){return 'R$ '+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function dataCurta(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+}
+
+let cols=3, ordem='recente';
+
+function ordenar(lista){
+  const l=[...lista];
+  if(ordem==='nome')l.sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  else if(ordem==='preco_asc')l.sort((a,b)=>a.preco-b.preco);
+  else if(ordem==='preco_desc')l.sort((a,b)=>b.preco-a.preco);
+  else l.sort((a,b)=>new Date(b.atualizado_em||0)-new Date(a.atualizado_em||0));
+  return l;
+}
+
+function render(){
+  const grid=$('#grid');
+  grid.dataset.cols=cols;
+  const lista=ordenar(CARTAS);
+  $('#total-cartas').textContent=lista.length;
+  $('#empty').classList.toggle('hide',lista.length>0);
+  grid.innerHTML=lista.map(c=>{
+    const codigo=(c.code||'')+(c.variant?'-'+c.variant:'');
+    const media=c.image_url
+      ?`<img src="${c.image_url}" alt="${esc(c.name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=&quot;ph&quot;>${ICO_CARD}</div>'">`
+      :`<div class="ph">${ICO_CARD}</div>`;
+    return `<div class="tile">
+      <div class="tile-media">
+        ${media}
+        <span class="tile-price">${brl(c.preco)}</span>
+        ${c.quantidade>1?`<span class="tile-qty">${c.quantidade}x</span>`:''}
+      </div>
+      <div class="tile-body">
+        <div class="tile-name">${esc(c.name||codigo||'Carta')}</div>
+        <div class="tile-code mono">${esc(codigo)}</div>
+        <div class="tile-meta">
+          <span class="tile-chip">${esc(c.estado||'Mint')}</span>
+          <span class="tile-updated">atualizado ${dataCurta(c.atualizado_em)}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$('#seg-cols').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-cols]');
+  if(!b)return;
+  cols=+b.dataset.cols;
+  $$('#seg-cols button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+  render();
+});
+$('#ordenar').addEventListener('change',e=>{ordem=e.target.value;render();});
+
+if(ATUALIZADO_GERAL){
+  const d=new Date(ATUALIZADO_GERAL);
+  $('#sub-atualizado').textContent=' · atualizado em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+render();
+</script>
+</html>

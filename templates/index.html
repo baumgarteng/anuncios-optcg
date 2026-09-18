@@ -509,6 +509,12 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
         </div>
         <button class="btn sm" id="btn-venda-lote" disabled>Gerar venda com selecionadas</button>
       </div>
+      <div class="row" style="margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn ghost sm" id="btn-binder-all">Gerar binder de todos</button>
+        <button class="btn ghost sm" id="btn-binder-sel" disabled>Gerar binder com selecionadas</button>
+        <input id="binder-titulo" placeholder="Nome do binder (opcional)" style="max-width:200px">
+      </div>
+      <div id="binder-list" style="margin-bottom:12px"></div>
       <div class="hint" id="saved-summary" style="margin-bottom:12px"></div>
       <div class="saved-list" id="saved"></div>
       <div class="empty hide" id="saved-empty">
@@ -1129,6 +1135,7 @@ async function carregar(){
     const d=await api('/api/anuncios?q='+encodeURIComponent($('#q').value.trim()));
     saved=d.anuncios||[];$('#cnt').textContent=saved.length;renderSaved();
   }catch(e){$('#saved').innerHTML='';showErr('Não consegui listar: '+e.message);}
+  carregarBinders();
 }
 function renderSaved(){
   const ativos=saved.filter(a=>a.status!=='vendida');
@@ -1659,7 +1666,59 @@ function atualizarBtnVendaLote(){
   const n=vendaSelecionados.size;
   $('#btn-venda-lote').disabled=n===0;
   $('#btn-venda-lote').textContent=n?`Gerar venda com ${n} selecionada${n===1?'':'s'}`:'Gerar venda com selecionadas';
+  $('#btn-binder-sel').disabled=n===0;
+  $('#btn-binder-sel').textContent=n?`Gerar binder com ${n} selecionada${n===1?'':'s'}`:'Gerar binder com selecionadas';
 }
+function linkBinder(token){return location.origin+'/binder/'+token;}
+async function carregarBinders(){
+  try{
+    const d=await api('/api/binders');
+    const bs=d.binders||[];
+    $('#binder-list').innerHTML=bs.length?('<div class="hint" style="margin-bottom:6px">Meus binders salvos</div>'+bs.map(b=>`
+      <div class="sv-row" style="padding:7px 10px">
+        <div class="sv-info">
+          <div class="sv-name">${esc(b.titulo||(b.kind==='all'?'Binder de todos':'Binder customizado'))}</div>
+          <div class="sv-meta mono">${b.kind==='all'?'todos os anúncios ativos':b.n_itens+' anúncio(s)'} · ${new Date(b.criado_em).toLocaleDateString('pt-BR')}</div>
+        </div>
+        <div class="sv-actions">
+          <button class="btn ghost sm" data-copy-binder="${b.token}">Copiar link</button>
+          <a class="btn ghost sm" href="${linkBinder(b.token)}" target="_blank" rel="noopener">Abrir</a>
+          <button class="btn danger sm" data-del-binder="${b.id}">Excluir</button>
+        </div>
+      </div>`).join('')):'';
+  }catch(e){/* silencioso — não é crítico pra tela principal */}
+}
+$('#btn-binder-all').onclick=async()=>{
+  try{
+    const d=await api('/api/binders',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({kind:'all'})});
+    await navigator.clipboard.writeText(linkBinder(d.token)).catch(()=>{});
+    toast('Link do binder copiado');
+    carregarBinders();
+  }catch(e){showErr('Não consegui gerar o binder: '+e.message);}
+};
+$('#btn-binder-sel').onclick=async()=>{
+  const ids=[...vendaSelecionados];
+  if(!ids.length)return;
+  try{
+    const d=await api('/api/binders',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({kind:'custom',anuncio_ids:ids,titulo:$('#binder-titulo').value.trim()})});
+    await navigator.clipboard.writeText(linkBinder(d.token)).catch(()=>{});
+    toast('Link do binder copiado');
+    $('#binder-titulo').value='';
+    carregarBinders();
+  }catch(e){showErr('Não consegui gerar o binder: '+e.message);}
+};
+$('#binder-list').addEventListener('click',async e=>{
+  const cp=e.target.closest('button[data-copy-binder]');
+  const del=e.target.closest('button[data-del-binder]');
+  if(cp){await navigator.clipboard.writeText(linkBinder(cp.dataset.copyBinder)).catch(()=>{});toast('Link copiado');}
+  if(del){
+    if(!confirm('Excluir este binder? O link para de funcionar.'))return;
+    try{await api('/api/binders/'+del.dataset.delBinder,{method:'DELETE'});toast('Binder excluído');carregarBinders();}
+    catch(e){showErr('Não consegui excluir: '+e.message);}
+  }
+});
 $('#btn-venda-lote').onclick=()=>{
   const ids=[...vendaSelecionados];
   if(!ids.length)return;
