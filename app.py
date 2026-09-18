@@ -1329,14 +1329,23 @@ def _binder_cartas(anuncio_ids=None):
     lendo direto do jsonb `cards` — sem tabela própria de cartas. Devolve também
     a data de atualização mais recente entre os anúncios incluídos (usada como
     "atualizado em" geral do binder — sempre ao vivo, nunca congelada)."""
+    # a foto que entra no binder é a FOTO REAL que o vendedor tirou da carta
+    # (anuncio_imagem — a mesma "capa" da lista de Anúncios), nunca a arte
+    # oficial de referência do catálogo (card.image_url tem marca-d'água
+    # SAMPLE e não é a carta física que está sendo vendida).
     with conn() as c, c.cursor() as cur:
         if anuncio_ids is None:
             cur.execute(
-                "SELECT id, cards, atualizado_em FROM anuncio WHERE status != 'vendida' ORDER BY criado_em DESC")
+                """SELECT a.id, a.cards, a.atualizado_em,
+                          (SELECT dados FROM anuncio_imagem i
+                            WHERE i.anuncio_id = a.id ORDER BY ordem LIMIT 1) AS capa
+                     FROM anuncio a WHERE a.status != 'vendida' ORDER BY a.criado_em DESC""")
         else:
             cur.execute(
-                """SELECT id, cards, atualizado_em FROM anuncio
-                    WHERE id = ANY(%s) AND status != 'vendida'""",
+                """SELECT a.id, a.cards, a.atualizado_em,
+                          (SELECT dados FROM anuncio_imagem i
+                            WHERE i.anuncio_id = a.id ORDER BY ordem LIMIT 1) AS capa
+                     FROM anuncio a WHERE a.id = ANY(%s) AND a.status != 'vendida'""",
                 (anuncio_ids,))
         rows = cur.fetchall()
 
@@ -1354,7 +1363,7 @@ def _binder_cartas(anuncio_ids=None):
                 "estado": card.get("estado") or "Mint",
                 "preco": float(card.get("preco") or 0),
                 "quantidade": int(card.get("quantidade") or 1),
-                "image_url": card.get("image_url"),
+                "image_url": r["capa"],
                 "atualizado_em": att.isoformat() if att else None,
             })
     return cartas, (atualizado_geral.isoformat() if atualizado_geral else None)
