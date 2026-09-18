@@ -183,6 +183,7 @@ button{font-family:inherit}
 .btn.sm{padding:8px 14px;font-size:13px;box-shadow:none}
 .btn.danger{background:var(--destructive-bg);color:var(--destructive);border:0;box-shadow:none}
 .btn.danger:hover{background:#ffe1db;filter:none}
+.btn.lote{background:linear-gradient(180deg,var(--sea-lit),var(--sea));color:#fff;box-shadow:0 10px 22px -10px rgba(30,167,224,.55)}
 .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
 
 /* ---------- card blocks ---------- */
@@ -507,7 +508,10 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
           <input id="q" placeholder="Buscar por nome ou código" style="max-width:320px">
           <button class="btn ghost sm" id="btn-reload">Atualizar</button>
         </div>
-        <button class="btn sm" id="btn-venda-lote" disabled>Gerar venda com selecionadas</button>
+        <div class="row">
+          <button class="btn sm lote" id="btn-lote-anuncios">Criar Anúncios em Lote</button>
+          <button class="btn sm" id="btn-venda-lote" disabled>Gerar venda com selecionadas</button>
+        </div>
       </div>
       <div class="row" style="margin-bottom:12px;flex-wrap:wrap">
         <button class="btn ghost sm" id="btn-binder-all">Gerar binder de todos</button>
@@ -710,6 +714,29 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
     <div id="superfrete-body"></div>
     <div class="editor-actions">
       <button class="btn ghost sm" id="superfrete-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="editor-overlay hide" id="lote-overlay">
+  <div class="editor-panel" style="max-width:480px">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Criar Anúncios em Lote</h3>
+    <p class="hint" style="margin-top:0">Escolha uma foto por carta. Cada foto vira um anúncio à parte, com o preço da Liga como ponto de partida — edite os detalhes depois na lista de Anúncios Salvos.</p>
+    <input type="file" id="lote-file" accept="image/*" multiple>
+    <div class="hint" id="lote-resumo" style="margin-top:6px"></div>
+    <div id="lote-progress-wrap" class="hide" style="margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+        <span class="hint" style="margin:0">Processando…</span>
+        <span class="hint mono" id="lote-contagem" style="margin:0">0 de 0</span>
+      </div>
+      <div style="background:var(--muted);border-radius:999px;height:10px;overflow:hidden">
+        <div id="lote-bar" style="background:linear-gradient(180deg,var(--sea-lit),var(--sea));height:100%;width:0%;transition:width .25s ease"></div>
+      </div>
+      <div id="lote-log" style="margin-top:10px;max-height:220px;overflow:auto"></div>
+    </div>
+    <div class="editor-actions">
+      <button class="btn ghost sm" id="lote-close">Fechar</button>
+      <button class="btn sm lote" id="lote-iniciar" disabled>Iniciar</button>
     </div>
   </div>
 </div>
@@ -1937,6 +1964,77 @@ function abrirSuperfrete(vid){
   $('#superfrete-overlay').classList.remove('hide');
 }
 $('#superfrete-close').onclick=()=>$('#superfrete-overlay').classList.add('hide');
+
+/* ---------- criar anúncios em lote (uma foto = uma carta = um anúncio) ---------- */
+let loteArquivos=[];
+function abrirLote(){
+  loteArquivos=[];
+  $('#lote-file').value='';
+  $('#lote-file').disabled=false;
+  $('#lote-iniciar').disabled=true;
+  $('#lote-progress-wrap').classList.add('hide');
+  $('#lote-log').innerHTML='';
+  $('#lote-bar').style.width='0%';
+  $('#lote-resumo').textContent='';
+  $('#lote-overlay').classList.remove('hide');
+}
+$('#btn-lote-anuncios').onclick=abrirLote;
+$('#lote-close').onclick=()=>$('#lote-overlay').classList.add('hide');
+$('#lote-file').onchange=e=>{
+  loteArquivos=[...e.target.files].filter(f=>f.type.startsWith('image/'));
+  $('#lote-iniciar').disabled=!loteArquivos.length;
+  $('#lote-resumo').textContent=loteArquivos.length
+    ?`${loteArquivos.length} foto${loteArquivos.length===1?'':'s'} selecionada${loteArquivos.length===1?'':'s'}`:'';
+};
+async function processarLote(){
+  if(!loteArquivos.length)return;
+  $('#lote-iniciar').disabled=true;
+  $('#lote-file').disabled=true;
+  $('#lote-progress-wrap').classList.remove('hide');
+  $('#lote-log').innerHTML='';
+  const total=loteArquivos.length;
+  let ok=0,falhas=0;
+  for(let i=0;i<total;i++){
+    const f=loteArquivos[i];
+    const linha=document.createElement('div');
+    linha.className='hint mono';
+    linha.style.padding='3px 0';
+    linha.textContent=`⏳ ${f.name}`;
+    $('#lote-log').prepend(linha);
+    $('#lote-contagem').textContent=`${i+1} de ${total}`;
+    let full;
+    try{
+      full=await resize(f,1600,.92);
+    }catch(e){
+      falhas++;linha.textContent=`✗ ${f.name} — não consegui ler a imagem`;
+      $('#lote-bar').style.width=Math.round(((i+1)/total)*100)+'%';
+      continue;
+    }
+    let card={};
+    try{
+      const d=await api('/api/identificar',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({imagens:[full]})});
+      card=(d.cards&&d.cards[0])||{};
+    }catch(e){/* sem identificação — cria o anúncio mesmo assim, dá pra editar depois */}
+    card=aplicarPrecoConhecido(Object.assign(blank(),card));
+    try{
+      await api('/api/anuncios',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({cards:[card],imagens:[full]})});
+      ok++;
+      const precoTxt=card.liga&&card.liga.preco!=null?' · '+brl(card.liga.preco):'';
+      linha.textContent=`✓ ${card.name||card.code||'sem identificação'}${precoTxt}`;
+      await carregar();
+    }catch(e){
+      falhas++;
+      linha.textContent=`✗ ${f.name} — falha ao salvar: ${e.message}`;
+    }
+    $('#lote-bar').style.width=Math.round(((i+1)/total)*100)+'%';
+  }
+  $('#lote-file').disabled=false;
+  $('#lote-iniciar').disabled=false;
+  toast(`Lote concluído: ${ok} anúncio${ok===1?'':'s'} criado${ok===1?'':'s'}${falhas?`, ${falhas} com erro`:''}`);
+}
+$('#lote-iniciar').onclick=processarLote;
 $('#superfrete-body').addEventListener('click',async e=>{
   const v=vendas.find(x=>x.id===superfreteVid);
   if(!v)return;
