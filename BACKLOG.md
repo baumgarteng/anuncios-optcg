@@ -65,5 +65,14 @@ O campo "N SKU(s) disponível(is)" também saiu errado — o `skus[]` do `/price
 
 **Estoque real, 2026-09-16**: confirmado nos logs de produção que dá sim pra saber quantos anúncios/unidades tem à venda, só que não vem no `/prices` sem parâmetro — é preciso consultar `/prices?sku=<id>` pra CADA SKU (condição×idioma) e somar `orderBook.sellOrders[].quantity` (unidades) e `.orderCount` (nº de anúncios). Como isso custa até 12 chamadas extras por carta, só faz essa varredura quando já se sabe que há oferta ativa (`disponivel === true`) — nas cartas sem oferta, pula direto. Também corrigido de brinde: o preço vindo do `/prices` usava a chave errada (`amountCents`, que não existe) em vez de `amount` (a API já devolve em centavos) — o preço mostrado só não estava errado até aqui por coincidência (caía no valor da busca em lote, que tem a chave certa).
 
+## ~~16. Criar Anúncios em Lote (uma foto = uma carta = um anúncio)~~ ✅ feito em 2026-09-18
+Botão "Criar Anúncios em Lote" (cor azul, distinto do "Gerar venda com selecionadas") na aba Anúncios, ao lado dele. Abre um modal só com um seletor de fotos (múltiplas) — sem drag&drop, só o diálogo de arquivos mesmo. Ao clicar "Iniciar", processa uma foto por vez, com barra de progresso e log ao vivo:
+
+1. Identifica a carta na foto (`/api/identificar`, mesma IA usada na tela de criação normal).
+2. Preenche o preço com o valor da Liga, se achou referência (`aplicarPrecoConhecido`, a mesma função já usada depois de identificar/buscar carta).
+3. Salva direto como um anúncio novo (`POST /api/anuncios`, reaproveitado sem mudança nenhuma no backend — ele já aceita `cards`+`imagens` sem `titulo`/`curto`/`completo`, ficam nulos e a lista não depende deles).
+
+Cada foto gera um anúncio, identificada ou não (se a IA não conseguir ler, cria mesmo assim vazio — dá pra editar na mão depois, esse é o ponto do recurso: ter todas as cartas listadas pra venda rapidamente). A lista de Anúncios Salvos é recarregada depois de cada anúncio criado, então ela vai enchendo conforme o lote processa.
+
 ---
-*Adicionado em 2026-09-14, atualizado em 2026-09-16. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
+*Adicionado em 2026-09-14, atualizado em 2026-09-18. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
