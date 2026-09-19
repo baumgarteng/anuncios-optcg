@@ -517,6 +517,7 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
         <button class="btn ghost sm" id="btn-binder-all">Gerar binder de todos</button>
         <button class="btn ghost sm" id="btn-binder-sel" disabled>Gerar binder com selecionadas</button>
         <input id="binder-titulo" placeholder="Nome do binder (opcional)" style="max-width:200px">
+        <button class="btn danger sm" id="btn-del-sel" disabled style="margin-left:auto">Excluir selecionados</button>
       </div>
       <div id="binder-list" style="margin-bottom:12px"></div>
       <div class="hint" id="saved-summary" style="margin-bottom:12px"></div>
@@ -1695,7 +1696,20 @@ function atualizarBtnVendaLote(){
   $('#btn-venda-lote').textContent=n?`Gerar venda com ${n} selecionada${n===1?'':'s'}`:'Gerar venda com selecionadas';
   $('#btn-binder-sel').disabled=n===0;
   $('#btn-binder-sel').textContent=n?`Gerar binder com ${n} selecionada${n===1?'':'s'}`:'Gerar binder com selecionadas';
+  $('#btn-del-sel').disabled=n===0;
+  $('#btn-del-sel').textContent=n?`Excluir ${n} selecionada${n===1?'':'s'}`:'Excluir selecionados';
 }
+$('#btn-del-sel').onclick=async()=>{
+  const ids=[...vendaSelecionados];
+  if(!ids.length)return;
+  if(!confirm(`Excluir ${ids.length} anúncio${ids.length===1?'':'s'} selecionado${ids.length===1?'':'s'}? Não dá pra desfazer.`))return;
+  try{
+    await Promise.all(ids.map(id=>api('/api/anuncios/'+id,{method:'DELETE'})));
+    vendaSelecionados.clear();
+    toast('Excluído'+(ids.length===1?'':'s'));
+    carregar();
+  }catch(e){showErr('Não consegui excluir tudo: '+e.message);carregar();}
+};
 function linkBinder(token){return location.origin+'/binder/'+token;}
 async function carregarBinders(){
   try{
