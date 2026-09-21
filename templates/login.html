@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrar — Anúncios OPTCG</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+:root{
+  --background:#eef8fc;--foreground:#16232f;--muted-foreground:#5c7183;--card:#ffffff;
+  --border:#dbeef5;--input:#ffffff;--primary:#ff4438;--primary-lit:#ff6b5e;
+  --destructive:#e6392c;--destructive-bg:#ffefec;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1100px 480px at -5% -15%, rgba(255,201,60,.28), transparent 60%),
+    radial-gradient(1200px 620px at 105% -10%, rgba(30,167,224,.22), transparent 55%),
+    linear-gradient(180deg,var(--background) 0%,#fbfdfe 45%,#ffffff 100%);
+  color:var(--foreground);font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+  min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.card{
+  background:var(--card);border:1px solid var(--border);border-radius:18px;padding:28px;
+  max-width:340px;width:100%;box-shadow:0 20px 45px -30px rgba(20,110,150,.5);
+}
+.mark{font-size:28px;margin-bottom:6px}
+h1{font-size:19px;margin:0 0 6px;font-weight:800}
+p.sub{color:var(--muted-foreground);font-size:13.5px;margin:0 0 18px}
+label{display:block;font-size:12.5px;font-weight:700;margin-bottom:6px}
+input{
+  width:100%;background:var(--input);border:1.5px solid var(--border);border-radius:11px;
+  color:var(--foreground);padding:11px 13px;font-family:inherit;font-size:15px;
+}
+input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(255,68,56,.14)}
+button{
+  width:100%;margin-top:16px;background:linear-gradient(180deg,var(--primary-lit),var(--primary));
+  color:#fff;border:0;border-radius:999px;padding:12px 20px;font-weight:700;font-size:14.5px;
+  cursor:pointer;box-shadow:0 10px 22px -10px rgba(255,68,56,.55);
+}
+button:hover{filter:brightness(1.05)}
+.erro{
+  background:var(--destructive-bg);color:var(--destructive);border-radius:10px;
+  padding:9px 12px;font-size:13px;font-weight:600;margin-bottom:14px;
+}
+</style>
+<div class="card">
+  <div class="mark">🔒</div>
+  <h1>Anúncios OPTCG</h1>
+  <p class="sub">Digite a senha pra acessar o painel.</p>
+  {% if erro %}<div class="erro">Senha incorreta — tente de novo.</div>{% endif %}
+  <form method="post" action="/login">
+    <label for="senha">Senha</label>
+    <input type="password" id="senha" name="senha" autofocus required>
+    <input type="hidden" name="next" value="{{ next or '' }}">
+    <button type="submit">Entrar</button>
+  </form>
+</div>
+</html>

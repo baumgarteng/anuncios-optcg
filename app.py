@@ -6,7 +6,7 @@ import urllib.parse
 import urllib.error
 import numpy as np
 import cv2
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -16,6 +16,10 @@ SUPERFRETE_TOKEN = os.environ.get("SUPERFRETE_TOKEN", "")
 SUPERFRETE_BASE = os.environ.get("SUPERFRETE_BASE", "https://api.superfrete.com")
 JORNADAGAMES_API_KEY = os.environ.get("JORNADAGAMES_API_KEY", "")
 JORNADAGAMES_BASE = os.environ.get("JORNADAGAMES_BASE", "https://api.jornadagames.com")
+# senha simples só pra afastar curioso — protege o painel de anúncios (não os
+# binders públicos, que continuam abertos pra quem recebe o link). Guardada
+# como env var pra poder trocar sem mexer no código; "optcg" é só o padrão.
+APP_LOGIN_SENHA = os.environ.get("APP_LOGIN_SENHA", "optcg")
 
 # endereço fixo de origem (remetente) — sempre o mesmo, informado pelo usuário
 ORIGEM_ENDERECO = {
@@ -94,6 +98,11 @@ def _superfrete_get(path):
 
 
 app = Flask(__name__)
+# chave fixa via env var pra cookie de login sobreviver a deploy/restart —
+# sem isso, cada novo processo teria uma chave aleatória diferente e
+# derrubaria o login de todo mundo a cada deploy.
+app.secret_key = os.environ.get("APP_SECRET_KEY") or secrets.token_hex(32)
+app.permanent_session_lifetime = datetime.timedelta(days=400)
 
 
 # ---------------------------------------------------------------- banco
@@ -438,6 +447,51 @@ def parse_json(txt):
     except json.JSONDecodeError as e:
         raise ValueError(f"JSON inválido na resposta: {e}")
     return obj
+
+
+# ---------------------------------------------------------------- login
+# gate simples por senha pro painel de anúncios — não é segurança de
+# verdade, é só pra afastar visita curiosa mexendo nos anúncios. Os
+# binders públicos (/binder/<token>) e o healthcheck ficam de fora: são
+# pra quem não tem (e não precisa ter) a senha.
+_ROTAS_SEM_LOGIN = ("/login", "/healthz")
+
+
+@app.before_request
+def _exigir_login():
+    caminho = request.path
+    if caminho.startswith("/binder/") or caminho in _ROTAS_SEM_LOGIN:
+        return
+    if session.get("autenticado"):
+        return
+    if caminho.startswith("/api/"):
+        return jsonify(erro="faça login pra usar o sistema de anúncios"), 401
+    return redirect(url_for("login", next=caminho))
+
+
+@app.get("/login")
+def login():
+    return render_template("login.html", next=request.args.get("next", ""))
+
+
+@app.post("/login")
+def login_post():
+    senha = (request.form.get("senha") or "").strip()
+    destino = request.form.get("next") or "/"
+    if not destino.startswith("/"):
+        destino = "/"
+    if senha and senha == APP_LOGIN_SENHA:
+        session.clear()
+        session["autenticado"] = True
+        session.permanent = True
+        return redirect(destino)
+    return render_template("login.html", erro=True, next=destino)
+
+
+@app.get("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 # ---------------------------------------------------------------- rotas
