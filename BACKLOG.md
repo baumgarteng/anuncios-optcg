@@ -74,5 +74,12 @@ Botão "Criar Anúncios em Lote" (cor azul, distinto do "Gerar venda com selecio
 
 Cada foto gera um anúncio, identificada ou não (se a IA não conseguir ler, cria mesmo assim vazio — dá pra editar na mão depois, esse é o ponto do recurso: ter todas as cartas listadas pra venda rapidamente). A lista de Anúncios Salvos é recarregada depois de cada anúncio criado, então ela vai enchendo conforme o lote processa.
 
+## ~~17. Senha simples pro painel de anúncios + CTA de WhatsApp no binder~~ ✅ feito em 2026-09-21
+Todo o painel (`/`, todas as rotas `/api/*`) agora pede uma senha simples (`APP_LOGIN_SENHA`, padrão `optcg`) antes de deixar entrar — não é segurança de verdade, é só pra afastar visita curiosa mexendo nos anúncios quando o link do binder circula por aí. Login guarda uma sessão de 400 dias (`app.permanent_session_lifetime`) num cookie assinado, então não pede senha de novo no mesmo navegador. `APP_SECRET_KEY` guardado como variável de ambiente (senão cada deploy trocaria a chave e derrubaria todo mundo logado). Link "Sair" discreto no cabeçalho.
+
+Os binders públicos (`/binder/<token>`) e o `/healthz` ficam de fora do gate — quem recebe o link do binder nunca vê nem precisa da senha, só o token da URL.
+
+De brinde, um botão de WhatsApp (verde, com o ícone) no rodapé do binder público: "Quer saber mais sobre o sistema de anúncios de OPTCG? Chame no WhatsApp", linkando pro (47) 99964-1711 — usado o número completo de 11 dígitos (mesmo da chave PIX já configurada), já que o que veio no pedido (`4799964711`, 10 dígitos) parecia faltar um dígito pro padrão de celular brasileiro.
+
 ---
-*Adicionado em 2026-09-14, atualizado em 2026-09-18. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
+*Adicionado em 2026-09-14, atualizado em 2026-09-21. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
