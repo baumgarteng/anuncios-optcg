@@ -1157,6 +1157,8 @@ async function salvar(){
   const payload={titulo:nomeAnuncio||gen.titulo,curto:gen.curto,completo:gen.completo,
     observacao:$('#obs').value.trim(),cards:cardsValidas,
     imagens:photos.map(p=>p.full)};
+  const btn=$('#btn-save'),textoOriginal=btn.textContent;
+  btn.disabled=true;btn.textContent='Salvando…';
   try{
     if(editandoId){
       await api('/api/anuncios/'+editandoId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -1166,7 +1168,10 @@ async function salvar(){
       toast('Salvo no banco');
     }
     carregar();limpar();
-  }catch(e){showErr('Não consegui salvar: '+e.message);}
+  }catch(e){
+    showErr('Não consegui salvar: '+e.message);
+    btn.disabled=false;btn.textContent=textoOriginal;
+  }
 }
 async function carregarParaEditar(id){
   try{
