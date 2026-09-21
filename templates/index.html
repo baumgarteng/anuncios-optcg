@@ -401,6 +401,11 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
         <div id="cards"></div>
         <button class="btn ghost sm" id="btn-add">Adicionar outra carta</button>
 
+        <div id="nome-anuncio-wrap" class="hide" style="margin-top:16px">
+          <label for="nome-anuncio">Nome do anúncio (obrigatório com mais de uma carta)</label>
+          <input type="text" id="nome-anuncio" placeholder="Ex.: Lote de Raras OP-09">
+        </div>
+
         <div style="margin-top:16px">
           <label for="obs">Observação especial (opcional)</label>
           <textarea id="obs" placeholder="Ex.: última unidade, aceito troca, envio ainda hoje"></textarea>
@@ -757,7 +762,7 @@ const FRASES_PADRAO=[
   'Aceito pagamento com cartão de crédito, consulte taxas.'
 ];
 
-let photos=[], cards=[], gen=null, mode='curto', saved=[], editandoId=null;
+let photos=[], cards=[], gen=null, mode='curto', saved=[], editandoId=null, editandoLoteTamanho=1;
 let vendas=[], vendaIndicadores=null, vendaEditId=null, vendaAnuncioIds=[], vendaCartasTmp=[], freteOpcoes=[], vendaComprovante=null;
 let vendaSelecionados=new Set();
 const ORIGEM_LABEL={anuncio:'Anúncio', whatsapp_grupo:'Grupo WhatsApp', jornada_games:'Jornada Games', outro:'Outro'};
@@ -1069,6 +1074,7 @@ function renderCards(){
       <div class="hint" data-hint="${i}" style="margin-top:9px">${hintHTML(i)}</div>
       </div>
     </div>`;}).join('');
+  $('#nome-anuncio-wrap').classList.toggle('hide', cards.filter(c=>c.name||c.code).length<=1 && editandoLoteTamanho<=1);
   renderPreview();
 }
 
@@ -1126,13 +1132,21 @@ function renderPreview(){
 }
 
 function limpar(){
-  photos=[];cards=[];gen=null;editandoId=null;$('#obs').value='';$('#cards-wrap').classList.add('hide');
+  photos=[];cards=[];gen=null;editandoId=null;editandoLoteTamanho=1;
+  $('#obs').value='';$('#nome-anuncio').value='';$('#cards-wrap').classList.add('hide');
+  $('#nome-anuncio-wrap').classList.add('hide');
   clearErr();renderShots();renderPreview();
 }
 async function salvar(){
   if(!gen)return;
-  const payload={titulo:gen.titulo,curto:gen.curto,completo:gen.completo,
-    observacao:$('#obs').value.trim(),cards:cards.filter(c=>c.name||c.code),
+  const cardsValidas=cards.filter(c=>c.name||c.code);
+  const nomeAnuncio=$('#nome-anuncio').value.trim();
+  if(cardsValidas.length>1&&!nomeAnuncio){
+    showErr('Informe o nome do anúncio — obrigatório quando tem mais de uma carta.');
+    return;
+  }
+  const payload={titulo:nomeAnuncio||gen.titulo,curto:gen.curto,completo:gen.completo,
+    observacao:$('#obs').value.trim(),cards:cardsValidas,
     imagens:photos.map(p=>p.full)};
   try{
     if(editandoId){
@@ -1149,9 +1163,11 @@ async function carregarParaEditar(id){
   try{
     const d=await api('/api/anuncios/'+id);
     editandoId=id;
+    editandoLoteTamanho=d.lote_tamanho||1;
     cards=(d.cards||[]).map(c=>Object.assign(blank(),c));
     photos=(d.imagens||[]).map(full=>({full,thumb:full}));
     $('#obs').value=d.observacao||'';
+    $('#nome-anuncio').value=d.titulo||'';
     gen={titulo:d.titulo,curto:d.texto_curto,completo:d.texto_completo};
     renderShots();renderCards();renderPreview();
     tab('new');
@@ -1171,16 +1187,18 @@ function renderSaved(){
   $('#saved-empty').classList.toggle('hide',ativos.length>0);
   $('#saved-summary').textContent=ativos.length?`${ativos.length} anúncio${ativos.length===1?'':'s'} ativo${ativos.length===1?'':'s'}`:'';
   $('#saved').innerHTML=ativos.map(a=>{
-    const cs=(a.cards||[]),nome=cs.map(c=>c.name).filter(Boolean).join(' + ')||a.titulo||'Sem nome';
+    const cs=(a.cards||[]),loteTamanho=a.lote_tamanho||1;
+    const nome=(loteTamanho>1&&a.titulo)?a.titulo:(cs.map(c=>c.name).filter(Boolean).join(' + ')||a.titulo||'Sem nome');
     const cod=cs.map(c=>(c.code||'')+(c.variant?'-'+c.variant:'')).filter(Boolean).join(', ');
     const accent=(cs[0]&&cs[0].colors&&cs[0].colors[0]&&COLORS[cs[0].colors[0]])||'var(--primary)';
     const thumb=a.capa?`<img class="sv-thumb" src="${a.capa}" alt="">`
       :`<div class="sv-thumb" style="display:flex;align-items:center;justify-content:center">${ICO_CARD}</div>`;
+    const loteTag=loteTamanho>1?` <span class="chip">${loteTamanho} cartas</span>`:'';
     return `<div class="sv-row" style="--accent:${accent}">
       <input type="checkbox" class="sv-check" data-check="${a.id}" ${vendaSelecionados.has(a.id)?'checked':''} style="width:auto;flex-shrink:0">
       ${thumb}
       <div class="sv-info">
-        <div class="sv-name">${esc(nome)}</div>
+        <div class="sv-name">${esc(nome)}${loteTag}</div>
         <div class="sv-meta mono">${esc(cod)} · ${brl(a.total)} · ${new Date(a.criado_em).toLocaleDateString('pt-BR')}</div>
       </div>
       <div class="sv-actions">
