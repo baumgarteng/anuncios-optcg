@@ -81,5 +81,10 @@ Os binders públicos (`/binder/<token>`) e o `/healthz` ficam de fora do gate �
 
 De brinde, um botão de WhatsApp (verde, com o ícone) no rodapé do binder público: "Quer saber mais sobre o sistema de anúncios de OPTCG? Chame no WhatsApp", linkando pro (47) 99964-1711 — usado o número completo de 11 dígitos (mesmo da chave PIX já configurada), já que o que veio no pedido (`4799964711`, 10 dígitos) parecia faltar um dígito pro padrão de celular brasileiro.
 
+## ~~18. Nome do anúncio (obrigatório com mais de uma carta) + tag de "N cartas" na lista~~ ✅ feito em 2026-09-21
+Campo "Nome do anúncio" aparece na tela de criação assim que tem mais de uma carta no anúncio (`#nome-anuncio-wrap`), e vira obrigatório pra salvar — sem ele, o "Salvar no banco" recusa com um erro. Esse nome passa a ser o nome mostrado na lista de Anúncios Salvos pra qualquer carta daquele lote (em vez do nome da carta), com uma tag "N cartas" do lado indicando que faz parte de um lote.
+
+Também disponível no Editar: como cada carta de um lote vira sua própria linha no banco (ver item 10), editar uma delas só carrega aquela carta no formulário — mas o campo "Nome do anúncio" aparece mesmo assim quando a linha faz parte de um lote (`GET /api/anuncios/<id>` agora devolve `lote_tamanho`), e salvar propaga o nome novo pras outras linhas do mesmo lote (`UPDATE ... WHERE lote_id = ...`), pra não ficar cada carta com um nome diferente pro mesmo post.
+
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-21. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*

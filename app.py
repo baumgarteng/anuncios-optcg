@@ -877,7 +877,8 @@ def api_anuncio_detalhe(aid):
     try:
         with conn() as c, c.cursor() as cur:
             cur.execute(
-                """SELECT id, criado_em, titulo, texto_curto, texto_completo, observacao, total, cards
+                """SELECT id, criado_em, titulo, texto_curto, texto_completo, observacao, total, cards,
+                          lote_id
                      FROM anuncio WHERE id = %s""", (aid,))
             row = cur.fetchone()
             if not row:
@@ -885,9 +886,17 @@ def api_anuncio_detalhe(aid):
             cur.execute(
                 "SELECT dados FROM anuncio_imagem WHERE anuncio_id = %s ORDER BY ordem", (aid,))
             imagens = [r["dados"] for r in cur.fetchall()]
+            # nº de cartas que nasceram do mesmo clique em "Salvar" (mesmo
+            # lote_id) — pro front saber se este anúncio faz parte de um
+            # lote maior, mesmo editando só uma carta dele por vez.
+            lote_tamanho = 1
+            if row["lote_id"]:
+                cur.execute("SELECT count(*) AS n FROM anuncio WHERE lote_id = %s", (row["lote_id"],))
+                lote_tamanho = cur.fetchone()["n"]
         row["criado_em"] = row["criado_em"].isoformat()
         row["total"] = float(row["total"] or 0)
         row["imagens"] = imagens
+        row["lote_tamanho"] = lote_tamanho
         return jsonify(row)
     except Exception as e:
         return jsonify(erro=str(e)), 500
@@ -905,6 +914,15 @@ def api_anuncio_atualizar(aid):
                           total=%s, cards=%s, atualizado_em=now() WHERE id=%s""",
                 (b.get("titulo"), b.get("curto"), b.get("completo"), b.get("observacao"),
                  total, json.dumps(cards, ensure_ascii=False), aid))
+            # o nome do anúncio é compartilhado por todas as cartas do mesmo
+            # lote (mesmo post, uma linha por carta) — propaga a mudança pras
+            # outras linhas também, senão a lista mostraria nomes diferentes
+            # pra cartas que vieram do mesmo anúncio.
+            cur.execute("SELECT lote_id FROM anuncio WHERE id = %s", (aid,))
+            lote = cur.fetchone()
+            if lote and lote["lote_id"]:
+                cur.execute("UPDATE anuncio SET titulo=%s WHERE lote_id=%s AND id != %s",
+                            (b.get("titulo"), lote["lote_id"], aid))
             cur.execute("DELETE FROM anuncio_imagem WHERE anuncio_id = %s", (aid,))
             for i, img in enumerate((b.get("imagens") or [])[:4]):
                 cur.execute(
