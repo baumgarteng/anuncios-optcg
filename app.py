@@ -899,16 +899,33 @@ def api_anuncio_detalhe(aid):
             row = cur.fetchone()
             if not row:
                 return jsonify(erro="anúncio não encontrado"), 404
-            cur.execute(
-                "SELECT dados FROM anuncio_imagem WHERE anuncio_id = %s ORDER BY ordem", (aid,))
-            imagens = [r["dados"] for r in cur.fetchall()]
-            # nº de cartas que nasceram do mesmo clique em "Salvar" (mesmo
-            # lote_id) — pro front saber se este anúncio faz parte de um
-            # lote maior, mesmo editando só uma carta dele por vez.
-            lote_tamanho = 1
+
             if row["lote_id"]:
-                cur.execute("SELECT count(*) AS n FROM anuncio WHERE lote_id = %s", (row["lote_id"],))
-                lote_tamanho = cur.fetchone()["n"]
+                # lote: cada carta é sua própria linha (ver api_salvar) — traz
+                # TODAS as linhas do mesmo lote_id, uma carta+foto por linha,
+                # na mesma ordem em que foram criadas. Sem isso, editar
+                # qualquer carta de um lote só mostrava ela sozinha.
+                cur.execute(
+                    """SELECT a.id, a.cards,
+                              (SELECT dados FROM anuncio_imagem i
+                                WHERE i.anuncio_id = a.id ORDER BY ordem LIMIT 1) AS capa
+                         FROM anuncio a WHERE a.lote_id = %s ORDER BY a.id""",
+                    (row["lote_id"],))
+                linhas = cur.fetchall()
+                cards_todos, imagens_todas = [], []
+                for l in linhas:
+                    for card in (l["cards"] or []):
+                        cards_todos.append(card)
+                        imagens_todas.append(l["capa"])
+                row["cards"] = cards_todos
+                imagens = imagens_todas
+                lote_tamanho = len(linhas)
+            else:
+                cur.execute(
+                    "SELECT dados FROM anuncio_imagem WHERE anuncio_id = %s ORDER BY ordem LIMIT 1", (aid,))
+                capa = cur.fetchone()
+                imagens = [capa["dados"]] if capa else []
+                lote_tamanho = 1
         row["criado_em"] = row["criado_em"].isoformat()
         row["total"] = float(row["total"] or 0)
         row["imagens"] = imagens
@@ -920,32 +937,74 @@ def api_anuncio_detalhe(aid):
 
 @app.put("/api/anuncios/<int:aid>")
 def api_anuncio_atualizar(aid):
+    """Reconcilia as cartas reenviadas com as linhas que já existem pra esse
+    lote (uma por carta, ver api_salvar): atualiza as que continuam, cria
+    linha nova pra carta adicionada na edição, e apaga a linha de qualquer
+    carta removida. Título/textos são sempre os mesmos em todas as linhas
+    do lote — mesmo post, uma linha por carta."""
     b = request.json or {}
     cards = b.get("cards") or []
-    total = sum(float(c.get("preco") or 0) * int(c.get("quantidade") or 1) for c in cards)
+    imagens = b.get("imagens") or []
+    if not cards:
+        return jsonify(erro="nenhuma carta informada"), 400
     try:
         with conn() as c, c.cursor() as cur:
-            cur.execute(
-                """UPDATE anuncio SET titulo=%s, texto_curto=%s, texto_completo=%s, observacao=%s,
-                          total=%s, cards=%s, atualizado_em=now() WHERE id=%s""",
-                (b.get("titulo"), b.get("curto"), b.get("completo"), b.get("observacao"),
-                 total, json.dumps(cards, ensure_ascii=False), aid))
-            # o nome do anúncio é compartilhado por todas as cartas do mesmo
-            # lote (mesmo post, uma linha por carta) — propaga a mudança pras
-            # outras linhas também, senão a lista mostraria nomes diferentes
-            # pra cartas que vieram do mesmo anúncio.
             cur.execute("SELECT lote_id FROM anuncio WHERE id = %s", (aid,))
-            lote = cur.fetchone()
-            if lote and lote["lote_id"]:
-                cur.execute("UPDATE anuncio SET titulo=%s WHERE lote_id=%s AND id != %s",
-                            (b.get("titulo"), lote["lote_id"], aid))
-            cur.execute("DELETE FROM anuncio_imagem WHERE anuncio_id = %s", (aid,))
-            for i, img in enumerate((b.get("imagens") or [])[:4]):
-                cur.execute(
-                    "INSERT INTO anuncio_imagem (anuncio_id, ordem, dados) VALUES (%s,%s,%s)",
-                    (aid, i, img))
+            atual = cur.fetchone()
+            if not atual:
+                return jsonify(erro="anúncio não encontrado"), 404
+            lote_id = atual["lote_id"]
+
+            if lote_id:
+                cur.execute("SELECT id FROM anuncio WHERE lote_id = %s ORDER BY id", (lote_id,))
+                ids_existentes = [r["id"] for r in cur.fetchall()]
+            else:
+                ids_existentes = [aid]
+                if len(cards) > 1:
+                    # virou lote na hora da edição (tinha 1 carta, agora tem
+                    # mais) — precisa de um lote_id novo pra linkar as linhas.
+                    lote_id = str(uuid.uuid4())
+
+            ids_finais = []
+            for i, card in enumerate(cards):
+                total_carta = float(card.get("preco") or 0) * int(card.get("quantidade") or 1)
+                if i < len(ids_existentes):
+                    linha_id = ids_existentes[i]
+                    cur.execute(
+                        """UPDATE anuncio SET titulo=%s, texto_curto=%s, texto_completo=%s,
+                                  observacao=%s, total=%s, cards=%s, lote_id=%s, atualizado_em=now()
+                                WHERE id=%s""",
+                        (b.get("titulo"), b.get("curto"), b.get("completo"), b.get("observacao"),
+                         total_carta, json.dumps([card], ensure_ascii=False), lote_id, linha_id))
+                else:
+                    cur.execute(
+                        """INSERT INTO anuncio (titulo, texto_curto, texto_completo, observacao, total,
+                                                 cards, status, lote_id)
+                           VALUES (%s,%s,%s,%s,%s,%s,'publicado',%s) RETURNING id""",
+                        (b.get("titulo"), b.get("curto"), b.get("completo"), b.get("observacao"),
+                         total_carta, json.dumps([card], ensure_ascii=False), lote_id))
+                    linha_id = cur.fetchone()["id"]
+                ids_finais.append(linha_id)
+
+                cur.execute("DELETE FROM anuncio_imagem WHERE anuncio_id = %s", (linha_id,))
+                fotos_da_carta = []
+                if i < len(imagens) and imagens[i]:
+                    fotos_da_carta.append(imagens[i])
+                verso = (card.get("verso") or {}).get("full")
+                if verso:
+                    fotos_da_carta.append(verso)
+                for j, img in enumerate(fotos_da_carta):
+                    cur.execute(
+                        "INSERT INTO anuncio_imagem (anuncio_id, ordem, dados) VALUES (%s,%s,%s)",
+                        (linha_id, j, img))
+
+            # carta(s) removida(s) durante a edição: sobra de linhas antigas
+            # além do que foi reenviado.
+            sobrando = ids_existentes[len(cards):]
+            if sobrando:
+                cur.execute("DELETE FROM anuncio WHERE id = ANY(%s)", (sobrando,))
             c.commit()
-        return jsonify(id=aid)
+        return jsonify(id=ids_finais[0], ids=ids_finais)
     except Exception as e:
         return jsonify(erro=str(e)), 500
 

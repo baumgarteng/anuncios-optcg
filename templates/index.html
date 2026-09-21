@@ -824,11 +824,11 @@ async function addFiles(list){
   if(cards.length)renderCards();
 }
 function renderShots(){
-  $('#shots').innerHTML=photos.map((p,i)=>`<div class="shot"><img src="${p.thumb}" alt="">
+  $('#shots').innerHTML=photos.map((p,i)=>p?`<div class="shot"><img src="${p.thumb}" alt="">
     <div class="btns">
       <button class="edit" data-edit="${i}" aria-label="Editar" title="Editar">${ICO_EDIT}</button>
       <button class="rm" data-i="${i}" aria-label="Remover">&times;</button>
-    </div></div>`).join('');
+    </div></div>`:'').join('');
   $('#btn-id').disabled=!photos.length;
   invalidarMosaico();
   renderPreview();
@@ -961,7 +961,7 @@ async function identify(){
   clearErr();$('#st-id').classList.remove('hide');$('#btn-id').disabled=true;
   try{
     const d=await api('/api/identificar',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({imagens:photos.map(p=>p.full)})});
+      body:JSON.stringify({imagens:photos.filter(p=>p).map(p=>p.full)})});
     if(!d.cards||!d.cards.length){showErr('Nenhuma carta identificada. Tente uma foto mais nítida ou preencha na mão.');return;}
     cards=d.cards.map(c=>aplicarPrecoConhecido(Object.assign(blank(),c)));
     renderCards();
@@ -1127,7 +1127,8 @@ function renderPreview(){
   const emptyMsg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M12 3c2.5 2.7 4 6 4 9s-1.5 6.3-4 9c-2.5-2.7-4-6-4-9s1.5-6.3 4-9z"/></svg>O anúncio aparece aqui depois que você identificar a carta e informar o preço.';
   if(!t&&!photos.length){wa.innerHTML='<div class="wa-empty">'+emptyMsg+'</div>';}
   else{
-    const imgs=photos.length?`<div class="imgs ${photos.length>1?'n2':''}">${photos.map(p=>`<img src="${p.full}" alt="">`).join('')}</div>`:'';
+    const fotosValidas=photos.filter(p=>p);
+    const imgs=fotosValidas.length?`<div class="imgs ${fotosValidas.length>1?'n2':''}">${fotosValidas.map(p=>`<img src="${p.full}" alt="">`).join('')}</div>`:'';
     const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     wa.innerHTML=`<div class="bubble">${imgs}<div class="txt">${t?waFmt(t):'<i style="color:var(--wa-time)">sem texto ainda</i>'}</div><div class="time">${now} ✓✓</div></div>`;
   }
@@ -1156,7 +1157,7 @@ async function salvar(){
   }
   const payload={titulo:nomeAnuncio||gen.titulo,curto:gen.curto,completo:gen.completo,
     observacao:$('#obs').value.trim(),cards:cardsValidas,
-    imagens:photos.map(p=>p.full)};
+    imagens:photos.map(p=>p?p.full:null)};
   const btn=$('#btn-save'),textoOriginal=btn.textContent;
   btn.disabled=true;btn.textContent='Salvando…';
   try{
@@ -1179,7 +1180,7 @@ async function carregarParaEditar(id){
     editandoId=id;
     editandoLoteTamanho=d.lote_tamanho||1;
     cards=(d.cards||[]).map(c=>Object.assign(blank(),c));
-    photos=(d.imagens||[]).map(full=>({full,thumb:full}));
+    photos=(d.imagens||[]).map(full=>full?{full,thumb:full}:null);
     $('#obs').value=d.observacao||'';
     $('#nome-anuncio').value=d.titulo||'';
     gen={titulo:d.titulo,curto:d.texto_curto,completo:d.texto_completo};
@@ -1289,7 +1290,7 @@ async function gerarMosaico(){
   const btn=$('#btn-mosaico-gerar');
   btn.disabled=true;
   try{
-    const imgs=await Promise.all(photos.map(p=>loadImgEl(p.full)));
+    const imgs=await Promise.all(photos.filter(p=>p).map(p=>loadImgEl(p.full)));
     const n=imgs.length, cols=Math.ceil(Math.sqrt(n)), rows=Math.ceil(n/cols);
     const harmonizado=mosaicMode==='harmonizado';
     const cellW=520, cellH=720;

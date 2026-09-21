@@ -102,5 +102,13 @@ Pacote de ajustes pedidos numa tacada só:
 
 Sobre "as listas de avulsas e lotes têm que estar na mesma página pra combinar numa venda": conferido no código — já funciona assim desde o item 19. As duas listas (`#saved-singles`/`#saved-lotes`) sempre estiveram lado a lado na mesma tela (nunca em abas separadas), e a seleção (`vendaSelecionados`) é um único conjunto compartilhado entre as duas — marcar uma carta avulsa numa lista e uma carta de um lote na outra e clicar "Gerar venda com selecionadas" sempre juntou tudo numa venda só. Pra deixar isso visível (e não só confiável por trás dos panos), o resumo acima das listas agora mostra ao vivo quantas estão selecionadas, com a mensagem "cartas avulsas e lotes combinam numa venda só".
 
+## ~~21. [bug] Editar um lote só trazia a primeira carta/foto~~ ✅ feito em 2026-09-21
+Bug de verdade, não só de exibição: como cada carta de um lote é sua própria linha no banco (ver item 10), `GET /api/anuncios/<id>` só devolvia os dados daquela UMA linha — abrir "Editar" em qualquer carta de um lote mostrava só ela, nunca as outras. Pior: o `PUT` (salvar a edição) jogava TODAS as cartas reenviadas dentro do `cards` daquela única linha, sem tocar nas linhas irmãs — que ficavam órfãs e desatualizadas no banco.
+
+Corrigido dos dois lados:
+- **GET**: quando a linha pedida tem `lote_id`, busca todas as linhas daquele lote (ordenadas por id) e devolve as cartas + a foto de capa de cada uma juntas, na mesma ordem em que foram criadas.
+- **PUT**: reconcilia as cartas reenviadas com as linhas que já existem pro lote, casando por posição — atualiza as que continuam, cria linha nova (com o mesmo `lote_id`) pra carta adicionada durante a edição, e apaga a linha de qualquer carta removida. Se um anúncio de carta avulsa virar lote na hora de editar (adicionou mais cartas), gera um `lote_id` novo pra linkar tudo.
+- **Front**: `photos[]` agora pode ter `null` nas posições sem foto (mantendo o alinhamento posicional com `cards[]`, a mesma convenção já usada em outros lugares do app) — ajustado `renderShots`, `renderPreview`, `gerarMosaico` e o payload de salvar pra não quebrar com essas posições vazias.
+
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-21. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
