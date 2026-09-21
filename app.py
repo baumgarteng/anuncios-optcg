@@ -207,6 +207,22 @@ def init_db():
             # usada pelo binder digital pra mostrar "atualizado em" por carta e no geral.
             # DEFAULT now() preenche as linhas existentes na hora da migração.
             cur.execute("ALTER TABLE anuncio ADD COLUMN IF NOT EXISTS atualizado_em timestamptz NOT NULL DEFAULT now()")
+            # backfill pontual: "Mint" era o padrão antigo do formulário, agora
+            # é "Near Mint" — troca só nos anúncios ABERTOS (não mexe no
+            # histórico do que já foi vendido, que reflete o estado real da
+            # venda). Idempotente: o WHERE EXISTS não acha mais nada depois
+            # da primeira vez que roda.
+            cur.execute(
+                """UPDATE anuncio SET cards = (
+                       SELECT jsonb_agg(
+                                CASE WHEN elem->>'estado' = 'Mint'
+                                     THEN elem || jsonb_build_object('estado', 'Near Mint')
+                                     ELSE elem END
+                                ORDER BY ord)
+                         FROM jsonb_array_elements(cards) WITH ORDINALITY AS t(elem, ord)
+                   )
+                 WHERE status != 'vendida'
+                   AND EXISTS (SELECT 1 FROM jsonb_array_elements(cards) e WHERE e->>'estado' = 'Mint')""")
             c.commit()
         app.logger.info("schema ok")
     except Exception as e:
@@ -756,7 +772,7 @@ def api_gerar():
         ficha.append({
             "codigo": c.get("code", "") + ("-" + c["variant"] if c.get("variant") else ""),
             "nome": c.get("name"),
-            "estado": c.get("estado") or "Mint",
+            "estado": c.get("estado") or "Near Mint",
             "quantidade": int(c.get("quantidade") or 1),
             "preco": f"R$ {float(preco):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if preco else None,
             "pct_abaixo_mdl": pct,
@@ -1397,28 +1413,35 @@ def api_vendas_etiqueta_resetar(vid):
 
 # ---------------------------------------------------------------- binder digital
 def _binder_cartas(anuncio_ids=None):
-    """Lista achatada das cartas dos anúncios ATIVOS (todos, ou só os ids dados),
-    lendo direto do jsonb `cards` — sem tabela própria de cartas. Devolve também
-    a data de atualização mais recente entre os anúncios incluídos (usada como
-    "atualizado em" geral do binder — sempre ao vivo, nunca congelada)."""
+    """Lista achatada das cartas dos anúncios ATIVOS (todos, ou só os ids dados)
+    que NÃO fazem parte de um lote de mais de uma carta — o binder é uma
+    vitrine carta a carta, lote é vendido como conjunto e não entra aqui.
+    Lê direto do jsonb `cards` (sempre o valor mais recente salvo, a consulta
+    roda de novo a cada carregamento da página) — sem tabela própria de
+    cartas. Devolve também a data de atualização mais recente entre os
+    anúncios incluídos (usada como "atualizado em" geral do binder)."""
     # a foto que entra no binder é a FOTO REAL que o vendedor tirou da carta
     # (anuncio_imagem — a mesma "capa" da lista de Anúncios), nunca a arte
     # oficial de referência do catálogo (card.image_url tem marca-d'água
     # SAMPLE e não é a carta física que está sendo vendida).
+    base_sql = """
+        SELECT id, cards, atualizado_em, capa FROM (
+            SELECT a.id, a.cards, a.atualizado_em, a.criado_em,
+                   (SELECT dados FROM anuncio_imagem i
+                     WHERE i.anuncio_id = a.id ORDER BY ordem LIMIT 1) AS capa,
+                   CASE WHEN a.lote_id IS NULL THEN 1
+                        ELSE COUNT(*) OVER (PARTITION BY a.lote_id) END AS lote_tamanho
+              FROM anuncio a
+             WHERE a.status != 'vendida' {filtro}
+        ) sub
+        WHERE lote_tamanho = 1
+        ORDER BY criado_em DESC
+    """
     with conn() as c, c.cursor() as cur:
         if anuncio_ids is None:
-            cur.execute(
-                """SELECT a.id, a.cards, a.atualizado_em,
-                          (SELECT dados FROM anuncio_imagem i
-                            WHERE i.anuncio_id = a.id ORDER BY ordem LIMIT 1) AS capa
-                     FROM anuncio a WHERE a.status != 'vendida' ORDER BY a.criado_em DESC""")
+            cur.execute(base_sql.format(filtro=""))
         else:
-            cur.execute(
-                """SELECT a.id, a.cards, a.atualizado_em,
-                          (SELECT dados FROM anuncio_imagem i
-                            WHERE i.anuncio_id = a.id ORDER BY ordem LIMIT 1) AS capa
-                     FROM anuncio a WHERE a.id = ANY(%s) AND a.status != 'vendida'""",
-                (anuncio_ids,))
+            cur.execute(base_sql.format(filtro="AND a.id = ANY(%s)"), (anuncio_ids,))
         rows = cur.fetchall()
 
     cartas, atualizado_geral = [], None
@@ -1432,7 +1455,7 @@ def _binder_cartas(anuncio_ids=None):
                 "code": card.get("code") or "",
                 "variant": card.get("variant") or "",
                 "name": card.get("name") or "",
-                "estado": card.get("estado") or "Mint",
+                "estado": card.get("estado") or "Near Mint",
                 "preco": float(card.get("preco") or 0),
                 "quantidade": int(card.get("quantidade") or 1),
                 "image_url": r["capa"],

@@ -527,7 +527,15 @@ textarea{resize:vertical;min-height:62px;font-variant-numeric:normal}
       </div>
       <div id="binder-list" style="margin-bottom:12px"></div>
       <div class="hint" id="saved-summary" style="margin-bottom:12px"></div>
-      <div class="saved-list" id="saved"></div>
+      <div id="saved">
+        <div style="font-weight:800;font-size:13.5px;margin:4px 0 8px">Cartas avulsas</div>
+        <div class="saved-list" id="saved-singles"></div>
+        <div class="row" id="pag-singles" style="justify-content:center;align-items:center;gap:10px;margin:10px 0 22px"></div>
+
+        <div style="font-weight:800;font-size:13.5px;margin:4px 0 8px">Anúncios em lote</div>
+        <div class="saved-list" id="saved-lotes"></div>
+        <div class="row" id="pag-lotes" style="justify-content:center;align-items:center;gap:10px;margin:10px 0"></div>
+      </div>
       <div class="empty hide" id="saved-empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l3-4h12l3 4M3 7v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7M3 7h18M9 11a3 3 0 0 0 6 0"/></svg>
         <p>Nenhum anúncio salvo ainda.</p>
@@ -945,7 +953,7 @@ $('#ed-apply').onclick=()=>{
   closeEditor();toast('Foto editada');
 };
 
-function blank(){return {code:'',variant:'',name:'',rarity:'',category:'',colors:[],cost:null,power:null,types:[],effect:'',liga:null,confidence:'manual',verified:false,preco:'',pct_manual:'',estado:'Mint',quantidade:1,verso:null,image_url:null};}
+function blank(){return {code:'',variant:'',name:'',rarity:'',category:'',colors:[],cost:null,power:null,types:[],effect:'',liga:null,confidence:'manual',verified:false,preco:'',pct_manual:'',estado:'Near Mint',quantidade:1,verso:null,image_url:null};}
 function aplicarPrecoConhecido(c){if(c.liga&&c.liga.preco!=null)c.preco=String(c.liga.preco);return c;}
 
 async function identify(){
@@ -1179,34 +1187,60 @@ async function carregar(){
   try{
     const d=await api('/api/anuncios?q='+encodeURIComponent($('#q').value.trim()));
     saved=d.anuncios||[];$('#cnt').textContent=saved.length;renderSaved();
-  }catch(e){$('#saved').innerHTML='';showErr('Não consegui listar: '+e.message);}
+  }catch(e){$('#saved-singles').innerHTML='';$('#saved-lotes').innerHTML='';showErr('Não consegui listar: '+e.message);}
   carregarBinders();
+}
+function savedRowHTML(a){
+  const cs=(a.cards||[]),loteTamanho=a.lote_tamanho||1;
+  const nome=(loteTamanho>1&&a.titulo)?a.titulo:(cs.map(c=>c.name).filter(Boolean).join(' + ')||a.titulo||'Sem nome');
+  const cod=cs.map(c=>(c.code||'')+(c.variant?'-'+c.variant:'')).filter(Boolean).join(', ');
+  const accent=(cs[0]&&cs[0].colors&&cs[0].colors[0]&&COLORS[cs[0].colors[0]])||'var(--primary)';
+  const thumb=a.capa?`<img class="sv-thumb" src="${a.capa}" alt="">`
+    :`<div class="sv-thumb" style="display:flex;align-items:center;justify-content:center">${ICO_CARD}</div>`;
+  const loteTag=loteTamanho>1?` <span class="chip">${loteTamanho} cartas</span>`:'';
+  return `<div class="sv-row" style="--accent:${accent}">
+    <input type="checkbox" class="sv-check" data-check="${a.id}" ${vendaSelecionados.has(a.id)?'checked':''} style="width:auto;flex-shrink:0">
+    ${thumb}
+    <div class="sv-info">
+      <div class="sv-name">${esc(nome)}${loteTag}</div>
+      <div class="sv-meta mono">${esc(cod)} · ${brl(a.total)} · ${new Date(a.criado_em).toLocaleDateString('pt-BR')}</div>
+    </div>
+    <div class="sv-actions">
+      <button class="btn ghost sm" data-edit-ad="${a.id}">Editar</button>
+      <button class="btn ghost sm" data-vender="${a.id}">Vendida</button>
+      <button class="btn danger sm" data-del="${a.id}">Excluir</button>
+    </div>
+  </div>`;
+}
+const POR_PAGINA_SALVOS=10;
+let paginaSingles=1, paginaLotes=1;
+function renderPaginacao(container,pagina,total,onMudar){
+  const totalPaginas=Math.max(1,Math.ceil(total/POR_PAGINA_SALVOS));
+  if(totalPaginas<=1){container.innerHTML='';return;}
+  container.innerHTML=`<button class="btn ghost sm" ${pagina<=1?'disabled':''} data-pg="prev">‹ Anterior</button>
+    <span class="hint mono" style="margin:0">Página ${pagina} de ${totalPaginas}</span>
+    <button class="btn ghost sm" ${pagina>=totalPaginas?'disabled':''} data-pg="next">Próxima ›</button>`;
+  container.onclick=e=>{
+    const b=e.target.closest('button[data-pg]');
+    if(!b)return;
+    onMudar(b.dataset.pg==='prev'?pagina-1:pagina+1);
+  };
+}
+function renderListaSalvos(listaEl,pagEl,lista,pagina,setPagina){
+  const totalPaginas=Math.max(1,Math.ceil(lista.length/POR_PAGINA_SALVOS));
+  if(pagina>totalPaginas){pagina=totalPaginas;setPagina(pagina);}
+  const inicio=(pagina-1)*POR_PAGINA_SALVOS;
+  listaEl.innerHTML=lista.slice(inicio,inicio+POR_PAGINA_SALVOS).map(savedRowHTML).join('');
+  renderPaginacao(pagEl,pagina,lista.length,p=>{setPagina(p);renderSaved();});
 }
 function renderSaved(){
   const ativos=saved.filter(a=>a.status!=='vendida');
+  const singles=ativos.filter(a=>(a.lote_tamanho||1)===1);
+  const lotes=ativos.filter(a=>(a.lote_tamanho||1)>1);
   $('#saved-empty').classList.toggle('hide',ativos.length>0);
   $('#saved-summary').textContent=ativos.length?`${ativos.length} anúncio${ativos.length===1?'':'s'} ativo${ativos.length===1?'':'s'}`:'';
-  $('#saved').innerHTML=ativos.map(a=>{
-    const cs=(a.cards||[]),loteTamanho=a.lote_tamanho||1;
-    const nome=(loteTamanho>1&&a.titulo)?a.titulo:(cs.map(c=>c.name).filter(Boolean).join(' + ')||a.titulo||'Sem nome');
-    const cod=cs.map(c=>(c.code||'')+(c.variant?'-'+c.variant:'')).filter(Boolean).join(', ');
-    const accent=(cs[0]&&cs[0].colors&&cs[0].colors[0]&&COLORS[cs[0].colors[0]])||'var(--primary)';
-    const thumb=a.capa?`<img class="sv-thumb" src="${a.capa}" alt="">`
-      :`<div class="sv-thumb" style="display:flex;align-items:center;justify-content:center">${ICO_CARD}</div>`;
-    const loteTag=loteTamanho>1?` <span class="chip">${loteTamanho} cartas</span>`:'';
-    return `<div class="sv-row" style="--accent:${accent}">
-      <input type="checkbox" class="sv-check" data-check="${a.id}" ${vendaSelecionados.has(a.id)?'checked':''} style="width:auto;flex-shrink:0">
-      ${thumb}
-      <div class="sv-info">
-        <div class="sv-name">${esc(nome)}${loteTag}</div>
-        <div class="sv-meta mono">${esc(cod)} · ${brl(a.total)} · ${new Date(a.criado_em).toLocaleDateString('pt-BR')}</div>
-      </div>
-      <div class="sv-actions">
-        <button class="btn ghost sm" data-edit-ad="${a.id}">Editar</button>
-        <button class="btn ghost sm" data-vender="${a.id}">Vendida</button>
-        <button class="btn danger sm" data-del="${a.id}">Excluir</button>
-      </div>
-    </div>`;}).join('');
+  renderListaSalvos($('#saved-singles'),$('#pag-singles'),singles,paginaSingles,p=>paginaSingles=p);
+  renderListaSalvos($('#saved-lotes'),$('#pag-lotes'),lotes,paginaLotes,p=>paginaLotes=p);
 }
 
 async function dataURLtoPngBlob(dataUrl){
@@ -1790,7 +1824,7 @@ $('#btn-venda-lote').onclick=()=>{
   })));
   abrirVendaModal({origem:'whatsapp_grupo',cards:cartas},ids);
 };
-$('#q').oninput=()=>{clearTimeout(tmr);tmr=setTimeout(carregar,350);};
+$('#q').oninput=()=>{clearTimeout(tmr);tmr=setTimeout(()=>{paginaSingles=1;paginaLotes=1;carregar();},350);};
 $('#btn-reload').onclick=carregar;
 
 /* ---------- sub-abas Anúncios / Vendidos ---------- */
