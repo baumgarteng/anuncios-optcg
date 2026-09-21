@@ -223,10 +223,6 @@ def init_db():
                    )
                  WHERE status != 'vendida'
                    AND EXISTS (SELECT 1 FROM jsonb_array_elements(cards) e WHERE e->>'estado' = 'Mint')""")
-            # limpeza pontual: o lote "Combo de Xebecs" foi salvo duas vezes
-            # (clique duplo durante um cold start lento, ids 61-62 e 63-64,
-            # confirmados idênticos) — remove só a segunda cópia (63, 64).
-            cur.execute("DELETE FROM anuncio WHERE id IN (63, 64)")
             c.commit()
         app.logger.info("schema ok")
     except Exception as e:
