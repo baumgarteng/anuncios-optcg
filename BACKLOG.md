@@ -86,5 +86,16 @@ Campo "Nome do anúncio" aparece na tela de criação assim que tem mais de uma 
 
 Também disponível no Editar: como cada carta de um lote vira sua própria linha no banco (ver item 10), editar uma delas só carrega aquela carta no formulário — mas o campo "Nome do anúncio" aparece mesmo assim quando a linha faz parte de um lote (`GET /api/anuncios/<id>` agora devolve `lote_tamanho`), e salvar propaga o nome novo pras outras linhas do mesmo lote (`UPDATE ... WHERE lote_id = ...`), pra não ficar cada carta com um nome diferente pro mesmo post.
 
+## ~~19. Estado padrão Near Mint + lista de Anúncios em duas listas paginadas + ajustes no binder~~ ✅ feito em 2026-09-21
+Pacote de ajustes pedidos numa tacada só:
+
+- **Estado padrão**: todo anúncio novo (pela tela normal ou pelo "Criar Anúncios em Lote") já nasce com estado "Near Mint" em vez de "Mint" (`blank()` no front, fallback no backend também atualizado). Migração de backfill em `init_db()` trocou `Mint` → `Near Mint` em todos os anúncios **abertos** (não mexeu no histórico do que já foi vendido).
+- **Anúncios Salvos em duas listas**: "Cartas avulsas" (lote de 1 carta) e "Anúncios em lote" (2+ cartas), cada uma com paginação própria de 10 linhas (`#saved-singles`/`#saved-lotes`, `renderListaSalvos`), mantendo a ordenação por data de criação (mais recente primeiro) que já existia. Ações (Editar/Vendida/Excluir) e seleção continuam funcionando igual, só mudou a divisão visual.
+- **Binder padrão 4×4** em vez de 3×3.
+- **Binder não mostra mais anúncios de lote** (2+ cartas) — o binder é uma vitrine carta a carta; `_binder_cartas()` agora calcula `lote_tamanho` (mesma lógica de `api_listar`) e só inclui linhas com `lote_tamanho = 1`. A consulta já rodava ao vivo a cada carregamento da página (sempre pegava o valor mais recente salvo), isso não mudou.
+- **Removida** a mensagem "Nenhuma carta disponível neste binder no momento" (bloco `.empty`) — tirada a pedido.
+- **Seleção de cartas no binder público**: cada carta ganhou um checkbox (canto superior esquerdo da foto). O botão de WhatsApp no rodapé, que antes só convidava a chamar sobre o sistema, agora muda de texto/link conforme a seleção: com 1+ cartas marcadas vira "Enviar N carta(s) selecionada(s) por WhatsApp" e abre o WhatsApp com uma mensagem pronta listando nome, código e preço de cada uma escolhida. Sem seleção, mantém a mensagem genérica de antes.
+- **Banner no topo do binder**: "Selecione as cartas que te interessam e mande no final por WhatsApp suas escolhas automaticamente." — avisa o visitante sobre o recurso novo.
+
 ---
 *Adicionado em 2026-09-14, atualizado em 2026-09-21. Atualize este arquivo conforme os itens forem sendo feitos ou o escopo mudar.*
