@@ -122,3 +122,32 @@ jobs:
           docker compose logs --tail 40 anuncios
           exit 1
           REMOTE
+
+      - name: Rotear o Caddy pro app de anúncios
+        if: env.SKIP != '1'
+        run: |
+          # Idempotente: só acrescenta o que ainda não existe em /opt/app. O mesmo
+          # conteúdo está no repo optcg-cloud (branch anuncios-caddy-route), então
+          # um deploy de lá depois não conflita.
+          ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" 'bash -s' "$HETZNER_HOST" <<'REMOTE'
+          set -euo pipefail
+          cd /opt/app
+          DOM="anuncios.$(echo "$1" | tr . -).sslip.io"
+          grep -q '^ANUNCIOS_DOMAIN=' .env || echo "ANUNCIOS_DOMAIN=$DOM" >> .env
+          grep -q 'ANUNCIOS_DOMAIN' Caddyfile || cat >> Caddyfile <<'CADDY'
+
+          {$ANUNCIOS_DOMAIN:anuncios.localhost} {
+          	reverse_proxy anuncios:10000 {
+          		transport http {
+          			read_timeout 150s
+          		}
+          	}
+
+          	encode gzip
+          }
+          CADDY
+          grep -q 'ANUNCIOS_DOMAIN' docker-compose.yml || \
+            sed -i 's|^\(\s*\)CADDY_DOMAIN: .*$|&\n\1ANUNCIOS_DOMAIN: ${ANUNCIOS_DOMAIN:-anuncios.localhost}|' docker-compose.yml
+          docker compose up -d caddy
+          echo "Anúncios em: https://$DOM"
+          REMOTE
