@@ -1,0 +1,109 @@
+name: Deploy to Hetzner
+
+# Sobe o app de anúncios no mesmo VPS do OPTCG-Cloud (/opt/anuncios), na rede
+# do compose de lá (/opt/app), falando com o Postgres "db" por dentro dela.
+#
+# Segredos do repositório (Settings > Secrets and variables > Actions):
+#   HETZNER_HOST        IP do VPS
+#   HETZNER_SSH_KEY     chave privada SSH com acesso root ao VPS
+#   ANTHROPIC_API_KEY, SUPERFRETE_TOKEN, JORNADAGAMES_API_KEY,
+#   APP_LOGIN_SENHA, APP_SECRET_KEY
+# Sem HETZNER_HOST/HETZNER_SSH_KEY o deploy é pulado (não quebra o push).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-hetzner
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+      HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SUPERFRETE_TOKEN: ${{ secrets.SUPERFRETE_TOKEN }}
+      JORNADAGAMES_API_KEY: ${{ secrets.JORNADAGAMES_API_KEY }}
+      APP_LOGIN_SENHA: ${{ secrets.APP_LOGIN_SENHA }}
+      APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
+    steps:
+      - name: Conferir segredos de acesso
+        run: |
+          if [ -z "$HETZNER_HOST" ] || [ -z "$HETZNER_SSH_KEY" ]; then
+            echo "::warning::HETZNER_HOST/HETZNER_SSH_KEY não configurados — deploy pulado"
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/checkout@v4
+        if: env.SKIP != '1'
+
+      - name: Preparar SSH
+        if: env.SKIP != '1'
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$HETZNER_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -T 10 "$HETZNER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Copiar o código pro servidor
+        if: env.SKIP != '1'
+        run: |
+          SSH="ssh -i $HOME/.ssh/id_deploy"
+          $SSH root@"$HETZNER_HOST" "mkdir -p /opt/anuncios"
+          rsync -az --delete --exclude '.git' --exclude '.env' --exclude '.env.secrets' \
+            -e "$SSH" ./ root@"$HETZNER_HOST":/opt/anuncios/
+
+      - name: Gravar o .env no servidor
+        if: env.SKIP != '1'
+        run: |
+          # Valores entram por stdin (não ficam na linha de comando do servidor).
+          # DATABASE_URL é montada no próprio servidor a partir da senha do
+          # Postgres que já existe em /opt/app/.env — ela nunca passa por aqui.
+          {
+            printf "ANTHROPIC_API_KEY='%s'\n" "$ANTHROPIC_API_KEY"
+            printf "SUPERFRETE_TOKEN='%s'\n" "$SUPERFRETE_TOKEN"
+            printf "JORNADAGAMES_API_KEY='%s'\n" "$JORNADAGAMES_API_KEY"
+            printf "APP_LOGIN_SENHA='%s'\n" "$APP_LOGIN_SENHA"
+            printf "APP_SECRET_KEY='%s'\n" "$APP_SECRET_KEY"
+          } | ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" \
+              'umask 077; cat > /opt/anuncios/.env.secrets'
+
+          ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/anuncios
+          PG=$(grep '^POSTGRES_PASSWORD=' /opt/app/.env | head -1 | cut -d= -f2- | tr -d "\"'")
+          [ -n "$PG" ] || { echo "POSTGRES_PASSWORD não encontrada em /opt/app/.env"; exit 1; }
+          umask 077
+          {
+            echo "DATABASE_URL=postgresql://optcg:${PG}@db:5432/optcg"
+            echo "OPTCG_LIVE_URL=http://app:10000"
+            cat .env.secrets
+          } > .env.new
+          mv .env.new .env
+          rm -f .env.secrets
+          REMOTE
+
+      - name: Subir o container e esperar ficar saudável
+        if: env.SKIP != '1'
+        run: |
+          ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/anuncios
+          docker compose up -d --build
+          for i in $(seq 1 24); do
+            if docker compose exec -T anuncios python -c \
+              "import urllib.request; print(urllib.request.urlopen('http://localhost:10000/healthz', timeout=5).read().decode())"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "healthz não respondeu OK em 2 minutos"
+          docker compose logs --tail 40 anuncios
+          exit 1
+          REMOTE
