@@ -38,6 +38,10 @@ jobs:
           if [ -z "$HETZNER_HOST" ] || [ -z "$HETZNER_SSH_KEY" ]; then
             echo "::warning::HETZNER_HOST/HETZNER_SSH_KEY não configurados — deploy pulado"
             echo "SKIP=1" >> "$GITHUB_ENV"
+          elif [ -z "$APP_LOGIN_SENHA" ]; then
+            # sem isso o app cai na senha padrão "optcg", que está no código
+            echo "::error::APP_LOGIN_SENHA não configurado — não subo com a senha padrão"
+            exit 1
           fi
 
       - uses: actions/checkout@v4
@@ -83,8 +87,19 @@ jobs:
           {
             echo "DATABASE_URL=postgresql://optcg:${PG}@db:5432/optcg"
             echo "OPTCG_LIVE_URL=http://app:10000"
-            cat .env.secrets
+            grep -v "='$" .env.secrets || true   # descarta segredos vazios
           } > .env.new
+          # A chave da Anthropic já existe no servidor (OPTCG-Cloud usa a mesma).
+          if ! grep -q '^ANTHROPIC_API_KEY=' .env.new; then
+            L=$(grep -s '^ANTHROPIC_API_KEY=' /opt/app/.env | head -1 || true)
+            [ -n "$L" ] && echo "$L" >> .env.new
+          fi
+          # Chave de sessão: mantém a anterior (login sobrevive a deploy) ou gera uma.
+          if ! grep -q '^APP_SECRET_KEY=' .env.new; then
+            L=$(grep -s '^APP_SECRET_KEY=' .env | head -1 || true)
+            [ -n "$L" ] || L="APP_SECRET_KEY=$(openssl rand -hex 32)"
+            echo "$L" >> .env.new
+          fi
           mv .env.new .env
           rm -f .env.secrets
           REMOTE
