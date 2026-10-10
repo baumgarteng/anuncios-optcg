@@ -51,17 +51,24 @@ jobs:
         if: env.SKIP != '1'
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$HETZNER_SSH_KEY" > ~/.ssh/id_deploy
+          # Segredos colados no navegador podem vir com CR/espaços/"root@".
+          printf '%s\n' "$HETZNER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -T 10 "$HETZNER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          VPS=$(printf '%s' "$HETZNER_HOST" | tr -d '[:space:]')
+          VPS=${VPS#*@}
+          echo "::add-mask::$VPS"
+          echo "VPS=$VPS" >> "$GITHUB_ENV"
+          printf 'Host *\n  StrictHostKeyChecking accept-new\n  ConnectTimeout 15\n' > ~/.ssh/config
+          ssh-keygen -y -f ~/.ssh/id_deploy > /dev/null || { echo "::error::HETZNER_SSH_KEY não é uma chave privada válida"; exit 1; }
+          ssh -i ~/.ssh/id_deploy root@"$VPS" true || { echo "::error::SSH em root@HETZNER_HOST falhou"; exit 1; }
 
       - name: Copiar o código pro servidor
         if: env.SKIP != '1'
         run: |
           SSH="ssh -i $HOME/.ssh/id_deploy"
-          $SSH root@"$HETZNER_HOST" "mkdir -p /opt/anuncios"
+          $SSH root@"$VPS" "mkdir -p /opt/anuncios"
           rsync -az --delete --exclude '.git' --exclude '.env' --exclude '.env.secrets' \
-            -e "$SSH" ./ root@"$HETZNER_HOST":/opt/anuncios/
+            -e "$SSH" ./ root@"$VPS":/opt/anuncios/
 
       - name: Gravar o .env no servidor
         if: env.SKIP != '1'
@@ -75,10 +82,10 @@ jobs:
             printf "JORNADAGAMES_API_KEY='%s'\n" "$JORNADAGAMES_API_KEY"
             printf "APP_LOGIN_SENHA='%s'\n" "$APP_LOGIN_SENHA"
             printf "APP_SECRET_KEY='%s'\n" "$APP_SECRET_KEY"
-          } | ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" \
+          } | ssh -i "$HOME/.ssh/id_deploy" root@"$VPS" \
               'umask 077; cat > /opt/anuncios/.env.secrets'
 
-          ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" 'bash -s' <<'REMOTE'
+          ssh -i "$HOME/.ssh/id_deploy" root@"$VPS" 'bash -s' <<'REMOTE'
           set -euo pipefail
           cd /opt/anuncios
           PG=$(grep '^POSTGRES_PASSWORD=' /opt/app/.env | head -1 | cut -d= -f2- | tr -d "\"'")
@@ -107,7 +114,7 @@ jobs:
       - name: Subir o container e esperar ficar saudável
         if: env.SKIP != '1'
         run: |
-          ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" 'bash -s' <<'REMOTE'
+          ssh -i "$HOME/.ssh/id_deploy" root@"$VPS" 'bash -s' <<'REMOTE'
           set -euo pipefail
           cd /opt/anuncios
           docker compose up -d --build
@@ -129,7 +136,7 @@ jobs:
           # Idempotente: só acrescenta o que ainda não existe em /opt/app. O mesmo
           # conteúdo está no repo optcg-cloud (branch anuncios-caddy-route), então
           # um deploy de lá depois não conflita.
-          ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" 'bash -s' "$HETZNER_HOST" <<'REMOTE'
+          ssh -i "$HOME/.ssh/id_deploy" root@"$VPS" 'bash -s' "$VPS" <<'REMOTE'
           set -euo pipefail
           cd /opt/app
           DOM="anuncios.$(echo "$1" | tr . -).sslip.io"
