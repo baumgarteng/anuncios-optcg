@@ -51,10 +51,10 @@ jobs:
         if: env.SKIP != '1'
         run: |
           install -m 700 -d ~/.ssh
-          # Segredos colados no navegador podem vir com CR/espaços/"root@".
-          printf '%s\n' "$HETZNER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+          # Segredos podem vir com CR/espaços/"root@", ou BOM se setados pelo PowerShell.
+          printf '%s\n' "$HETZNER_SSH_KEY" | tr -d '\r' | sed '1s/^\xEF\xBB\xBF//' > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
-          VPS=$(printf '%s' "$HETZNER_HOST" | tr -d '[:space:]')
+          VPS=$(printf '%s' "$HETZNER_HOST" | sed 's/^\xEF\xBB\xBF//' | tr -d '[:space:]')
           VPS=${VPS#*@}
           echo "::add-mask::$VPS"
           echo "VPS=$VPS" >> "$GITHUB_ENV"
@@ -76,12 +76,14 @@ jobs:
           # Valores entram por stdin (não ficam na linha de comando do servidor).
           # DATABASE_URL é montada no próprio servidor a partir da senha do
           # Postgres que já existe em /opt/app/.env — ela nunca passa por aqui.
+          # Tira BOM (gh secret set via pipe do PowerShell grava um) e CR finais.
+          nobom() { printf '%s' "$1" | sed '1s/^\xEF\xBB\xBF//' | tr -d '\r'; }
           {
-            printf "ANTHROPIC_API_KEY='%s'\n" "$ANTHROPIC_API_KEY"
-            printf "SUPERFRETE_TOKEN='%s'\n" "$SUPERFRETE_TOKEN"
-            printf "JORNADAGAMES_API_KEY='%s'\n" "$JORNADAGAMES_API_KEY"
-            printf "APP_LOGIN_SENHA='%s'\n" "$APP_LOGIN_SENHA"
-            printf "APP_SECRET_KEY='%s'\n" "$APP_SECRET_KEY"
+            printf "ANTHROPIC_API_KEY='%s'\n" "$(nobom "$ANTHROPIC_API_KEY")"
+            printf "SUPERFRETE_TOKEN='%s'\n" "$(nobom "$SUPERFRETE_TOKEN")"
+            printf "JORNADAGAMES_API_KEY='%s'\n" "$(nobom "$JORNADAGAMES_API_KEY")"
+            printf "APP_LOGIN_SENHA='%s'\n" "$(nobom "$APP_LOGIN_SENHA")"
+            printf "APP_SECRET_KEY='%s'\n" "$(nobom "$APP_SECRET_KEY")"
           } | ssh -i "$HOME/.ssh/id_deploy" root@"$VPS" \
               'umask 077; cat > /opt/anuncios/.env.secrets'
 
