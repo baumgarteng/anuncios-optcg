@@ -1,0 +1,25 @@
+services:
+  anuncios:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: "10000"
+    expose:
+      - "10000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:10000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - optcg
+
+# Entra na rede do compose do OPTCG-Cloud (/opt/app), onde já estão o Postgres
+# (host "db") e o Caddy. Nome padrão = <pasta do projeto>_default.
+networks:
+  optcg:
+    external: true
+    name: ${OPTCG_NETWORK:-app_default}

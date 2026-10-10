@@ -1,0 +1,153 @@
+name: Deploy to Hetzner
+
+# Sobe o app de anúncios no mesmo VPS do OPTCG-Cloud (/opt/anuncios), na rede
+# do compose de lá (/opt/app), falando com o Postgres "db" por dentro dela.
+#
+# Segredos do repositório (Settings > Secrets and variables > Actions):
+#   HETZNER_HOST        IP do VPS
+#   HETZNER_SSH_KEY     chave privada SSH com acesso root ao VPS
+#   ANTHROPIC_API_KEY, SUPERFRETE_TOKEN, JORNADAGAMES_API_KEY,
+#   APP_LOGIN_SENHA, APP_SECRET_KEY
+# Sem HETZNER_HOST/HETZNER_SSH_KEY o deploy é pulado (não quebra o push).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-hetzner
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+      HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SUPERFRETE_TOKEN: ${{ secrets.SUPERFRETE_TOKEN }}
+      JORNADAGAMES_API_KEY: ${{ secrets.JORNADAGAMES_API_KEY }}
+      APP_LOGIN_SENHA: ${{ secrets.APP_LOGIN_SENHA }}
+      APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
+    steps:
+      - name: Conferir segredos de acesso
+        run: |
+          if [ -z "$HETZNER_HOST" ] || [ -z "$HETZNER_SSH_KEY" ]; then
+            echo "::warning::HETZNER_HOST/HETZNER_SSH_KEY não configurados — deploy pulado"
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          elif [ -z "$APP_LOGIN_SENHA" ]; then
+            # sem isso o app cai na senha padrão "optcg", que está no código
+            echo "::error::APP_LOGIN_SENHA não configurado — não subo com a senha padrão"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        if: env.SKIP != '1'
+
+      - name: Preparar SSH
+        if: env.SKIP != '1'
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$HETZNER_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -T 10 "$HETZNER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Copiar o código pro servidor
+        if: env.SKIP != '1'
+        run: |
+          SSH="ssh -i $HOME/.ssh/id_deploy"
+          $SSH root@"$HETZNER_HOST" "mkdir -p /opt/anuncios"
+          rsync -az --delete --exclude '.git' --exclude '.env' --exclude '.env.secrets' \
+            -e "$SSH" ./ root@"$HETZNER_HOST":/opt/anuncios/
+
+      - name: Gravar o .env no servidor
+        if: env.SKIP != '1'
+        run: |
+          # Valores entram por stdin (não ficam na linha de comando do servidor).
+          # DATABASE_URL é montada no próprio servidor a partir da senha do
+          # Postgres que já existe em /opt/app/.env — ela nunca passa por aqui.
+          {
+            printf "ANTHROPIC_API_KEY='%s'\n" "$ANTHROPIC_API_KEY"
+            printf "SUPERFRETE_TOKEN='%s'\n" "$SUPERFRETE_TOKEN"
+            printf "JORNADAGAMES_API_KEY='%s'\n" "$JORNADAGAMES_API_KEY"
+            printf "APP_LOGIN_SENHA='%s'\n" "$APP_LOGIN_SENHA"
+            printf "APP_SECRET_KEY='%s'\n" "$APP_SECRET_KEY"
+          } | ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" \
+              'umask 077; cat > /opt/anuncios/.env.secrets'
+
+          ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/anuncios
+          PG=$(grep '^POSTGRES_PASSWORD=' /opt/app/.env | head -1 | cut -d= -f2- | tr -d "\"'")
+          [ -n "$PG" ] || { echo "POSTGRES_PASSWORD não encontrada em /opt/app/.env"; exit 1; }
+          umask 077
+          {
+            echo "DATABASE_URL=postgresql://optcg:${PG}@db:5432/optcg"
+            echo "OPTCG_LIVE_URL=http://app:10000"
+            grep -v "='$" .env.secrets || true   # descarta segredos vazios
+          } > .env.new
+          # A chave da Anthropic já existe no servidor (OPTCG-Cloud usa a mesma).
+          if ! grep -q '^ANTHROPIC_API_KEY=' .env.new; then
+            L=$(grep -s '^ANTHROPIC_API_KEY=' /opt/app/.env | head -1 || true)
+            [ -n "$L" ] && echo "$L" >> .env.new
+          fi
+          # Chave de sessão: mantém a anterior (login sobrevive a deploy) ou gera uma.
+          if ! grep -q '^APP_SECRET_KEY=' .env.new; then
+            L=$(grep -s '^APP_SECRET_KEY=' .env | head -1 || true)
+            [ -n "$L" ] || L="APP_SECRET_KEY=$(openssl rand -hex 32)"
+            echo "$L" >> .env.new
+          fi
+          mv .env.new .env
+          rm -f .env.secrets
+          REMOTE
+
+      - name: Subir o container e esperar ficar saudável
+        if: env.SKIP != '1'
+        run: |
+          ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/anuncios
+          docker compose up -d --build
+          for i in $(seq 1 24); do
+            if docker compose exec -T anuncios python -c \
+              "import urllib.request; print(urllib.request.urlopen('http://localhost:10000/healthz', timeout=5).read().decode())"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "healthz não respondeu OK em 2 minutos"
+          docker compose logs --tail 40 anuncios
+          exit 1
+          REMOTE
+
+      - name: Rotear o Caddy pro app de anúncios
+        if: env.SKIP != '1'
+        run: |
+          # Idempotente: só acrescenta o que ainda não existe em /opt/app. O mesmo
+          # conteúdo está no repo optcg-cloud (branch anuncios-caddy-route), então
+          # um deploy de lá depois não conflita.
+          ssh -i "$HOME/.ssh/id_deploy" root@"$HETZNER_HOST" 'bash -s' "$HETZNER_HOST" <<'REMOTE'
+          set -euo pipefail
+          cd /opt/app
+          DOM="anuncios.$(echo "$1" | tr . -).sslip.io"
+          grep -q '^ANUNCIOS_DOMAIN=' .env || echo "ANUNCIOS_DOMAIN=$DOM" >> .env
+          grep -q 'ANUNCIOS_DOMAIN' Caddyfile || cat >> Caddyfile <<'CADDY'
+
+          {$ANUNCIOS_DOMAIN:anuncios.localhost} {
+          	reverse_proxy anuncios:10000 {
+          		transport http {
+          			read_timeout 150s
+          		}
+          	}
+
+          	encode gzip
+          }
+          CADDY
+          grep -q 'ANUNCIOS_DOMAIN' docker-compose.yml || \
+            sed -i 's|^\(\s*\)CADDY_DOMAIN: .*$|&\n\1ANUNCIOS_DOMAIN: ${ANUNCIOS_DOMAIN:-anuncios.localhost}|' docker-compose.yml
+          docker compose up -d caddy
+          echo "Anúncios em: https://$DOM"
+          REMOTE
